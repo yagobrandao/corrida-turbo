@@ -9,7 +9,9 @@ import { sfx } from '../../core/audio.js';
 import {
   COLS, ROWS, TILE, MAPS, TOWERS, ENEMIES, BRANCHES, PERMS,
   START_COINS, BASE_LIVES, PREP_TIME, EARLY_BONUS, SELL_RATIO, SLOW_TIME,
-  waveSpec, hpMult, rewardMult, wavePerfectBonus, COMBO_MILESTONES, comboBonus,
+  TOWER_DOWN_TIME,
+  waveSpec, hpMult, rewardMult, speedMult, atkMult, wavePerfectBonus,
+  COMBO_MILESTONES, comboBonus,
 } from './config.js';
 
 const OUTLINE = 0x1c2440;
@@ -369,7 +371,7 @@ export default class TDScene extends Phaser.Scene {
     const barBg = this.add.rectangle(0, 0, def.size * 2, 4.5, 0x000000, 0.55).setDepth(10.5);
     this.enemies.push({
       type, def, hp, max: hp, t: 0, slowUntil: 0,
-      phase: 0, ethereal: false,
+      phase: 0, ethereal: false, atkCd: 0,
       spr, bar, barBg,
     });
   }
@@ -473,7 +475,13 @@ export default class TDScene extends Phaser.Scene {
       fontFamily: 'Fredoka, sans-serif', fontSize: '11px', fontStyle: '700', color: '#ffd23e',
       stroke: '#1c2440', strokeThickness: 3,
     }).setOrigin(0.5).setDepth(7);
-    this.towers.push({ def, c, r, x, y, lv: 1, branch: null, cd: 0, invested: def.cost, spr, lvText });
+    const hpBg = this.add.rectangle(x, y + 20, 32, 4, 0x000000, 0.6).setDepth(7).setVisible(false);
+    const hpBar = this.add.rectangle(x - 16, y + 20, 32, 4, 0x43d68c).setOrigin(0, 0.5).setDepth(7.1).setVisible(false);
+    this.towers.push({
+      def, c, r, x, y, lv: 1, branch: null, cd: 0, invested: def.cost,
+      hp: def.hp[0], maxHp: def.hp[0], downUntil: 0,
+      spr, lvText, hpBg, hpBar,
+    });
     this.burst.emitParticleAt(x, y, 8);
     sfx.powerup();
     this._closePanels();
@@ -527,6 +535,10 @@ export default class TDScene extends Phaser.Scene {
           this.coins -= upCost;
           tw.invested += upCost;
           tw.lv++;
+          // melhorar reforça a estrutura e a repara de imediato
+          tw.maxHp = tw.def.hp[tw.lv - 1];
+          tw.hp = tw.maxHp;
+          tw.downUntil = 0;
           tw.lvText.setText(String(tw.lv));
           this.burst.emitParticleAt(tw.x, tw.y, 10);
           sfx.powerup();
@@ -542,7 +554,7 @@ export default class TDScene extends Phaser.Scene {
     const sellVal = Math.floor(tw.invested * SELL_RATIO);
     this._btn(84, top + 78, 130, 46, `VENDER  ${sellVal}`, 0x9c2820, () => {
       this.coins += sellVal;
-      tw.spr.destroy(); tw.lvText.destroy();
+      tw.spr.destroy(); tw.lvText.destroy(); tw.hpBg.destroy(); tw.hpBar.destroy();
       this.towers = this.towers.filter(t => t !== tw);
       this._closePanels();
       this._pushHUD();
@@ -552,7 +564,34 @@ export default class TDScene extends Phaser.Scene {
   // ================================================================
   // combate
   // ================================================================
+  // ---- torres sob ataque ----
+  _towerNearest(x, y, range) {
+    let best = null, bestD = range;
+    for (const tw of this.towers) {
+      if (tw.downUntil > this.now) continue;
+      const d = Math.hypot(tw.x - x, tw.y - y);
+      if (d <= bestD) { bestD = d; best = tw; }
+    }
+    return best;
+  }
+
+  _hitTower(tw, dmg) {
+    tw.hp -= dmg;
+    this._float(tw.x, tw.y - 22, `-${Math.round(dmg)}`, '#ff6b5e');
+    tw.hpBg.setVisible(true); tw.hpBar.setVisible(true);
+    tw.hpBar.width = Math.max(0, 32 * (tw.hp / tw.maxHp));
+    if (tw.hp <= 0) {
+      tw.hp = 0;
+      tw.downUntil = this.now + TOWER_DOWN_TIME;
+      tw.spr.setTint(0x555a70).setAlpha(0.45);
+      this.burst.emitParticleAt(tw.x, tw.y, 14);
+      this.cameras.main.shake(150, 0.006);
+      sfx.hit();
+    }
+  }
+
   _damage(en, amount, splash, slow) {
+    amount *= 1 - (en.def.armor || 0);   // blindagem absorve parte do golpe
     en.hp -= amount;
     this._float(en.spr.x, en.spr.y - 18, String(Math.round(amount)), '#ffffff');
     if (slow) en.slowUntil = Math.max(en.slowUntil, this.now + SLOW_TIME);
@@ -670,15 +709,34 @@ export default class TDScene extends Phaser.Scene {
 
     // inimigos
     for (const en of [...this.enemies]) {
-      let spd = en.def.speed;
-      if (this.now < en.slowUntil) spd *= 0.58;
-      en.t += spd * dt;
       // fantasma: alterna entre sólido e etéreo
       if (en.def.phasing) {
         en.phase += dt;
         en.ethereal = (en.phase % 3.7) > 2.6;
         en.spr.setAlpha(en.ethereal ? 0.3 : 1);
       }
+
+      // sapadores e chefes param para derrubar a torre mais próxima
+      let attacking = false;
+      if (en.def.atk) {
+        const here = this._posAt(en.t);
+        const tw = this._towerNearest(here.x, here.y, en.def.atkRange);
+        if (tw) {
+          attacking = true;
+          en.atkCd -= dt;
+          if (en.atkCd <= 0) {
+            en.atkCd = en.def.atkRate;
+            this._hitTower(tw, en.def.atk * atkMult(this.wave));
+            const flash = this.add.image(tw.x, tw.y, 'td-p').setTint(0xff8b3d).setDepth(16).setScale(2);
+            this.tweens.add({ targets: flash, alpha: 0, scale: 0.5, duration: 220, onComplete: () => flash.destroy() });
+          }
+        }
+      }
+
+      let spd = en.def.speed * speedMult(this.wave);
+      if (this.now < en.slowUntil) spd *= 0.58;
+      if (!attacking) en.t += spd * dt;
+
       if (en.t >= this.pathTotal) { this._leakEnemy(en); continue; }
       const p = this._posAt(en.t);
       en.spr.setPosition(p.x, p.y);
@@ -690,6 +748,26 @@ export default class TDScene extends Phaser.Scene {
 
     // torres
     for (const tw of this.towers) {
+      // derrubada: não atira e mostra a contagem para voltar
+      if (tw.downUntil > this.now) {
+        tw.lvText.setText(Math.ceil(tw.downUntil - this.now) + 's');
+        continue;
+      }
+      if (tw.hp <= 0) {
+        // acabou de se reerguer
+        tw.hp = tw.maxHp;
+        tw.spr.clearTint().setAlpha(1);
+        tw.lvText.setText(String(tw.lv));
+        tw.hpBg.setVisible(false); tw.hpBar.setVisible(false);
+        this.burst.emitParticleAt(tw.x, tw.y, 8);
+      }
+      // reparo lento fora de combate
+      if (tw.hp < tw.maxHp) {
+        tw.hp = Math.min(tw.maxHp, tw.hp + tw.maxHp * 0.06 * dt);
+        tw.hpBar.width = 32 * (tw.hp / tw.maxHp);
+        if (tw.hp >= tw.maxHp) { tw.hpBg.setVisible(false); tw.hpBar.setVisible(false); }
+      }
+
       tw.cd -= dt;
       if (tw.cd > 0) continue;
       const st = this._towerStats(tw);
