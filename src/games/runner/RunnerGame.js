@@ -231,6 +231,10 @@ export function createGame(ctx) {
         score: Math.floor(s.sc), coins: s.co || 0,
         detail: `${ui.nf(Math.floor(s.d))} m`,
         sort: s.d,
+        // métricas para missões/conquistas (só as minhas importam)
+        metrics: p.slot === mySlot
+          ? { dist: Math.floor(s.d), coins: s.co || 0, kmh: s.kmh || (scene ? Math.round(scene.topSpeed * 3.6) : 0) }
+          : undefined,
       };
     });
     onFinish(rows);

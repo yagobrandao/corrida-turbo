@@ -87,6 +87,15 @@ export function setUpgradeLevel(id, level) {
   write();
 }
 
+// Recompensa de missão/conquista: entra nas moedas gastáveis e no total
+// histórico (que é o que destrava skins e melhorias).
+export function addCoins(n) {
+  const p = read();
+  p.coins += n;
+  p.totalCoins += n;
+  write();
+}
+
 export function spendCoins(n) {
   const p = read();
   if (p.coins < n) return false;

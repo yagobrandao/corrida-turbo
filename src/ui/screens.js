@@ -110,6 +110,7 @@ export function showHub(state, actions) {
       <button class="btn green" data-a="create">CRIAR SALA</button>
       <button class="btn orange" data-a="join">ENTRAR COM CÓDIGO</button>
       <div class="hub-foot">
+        <button class="mini-link" data-a="quests">🎯 Missões${state.pendingQuests ? `<span class="badge">${state.pendingQuests}</span>` : ''}</button>
         <button class="mini-link" data-a="skins">🎭 Personagens</button>
         <button class="mini-link" data-a="upgrades">🧪 Melhorias</button>
         <button class="mini-link" data-a="settings">⚙️ Ajustes</button>
@@ -124,6 +125,7 @@ export function showHub(state, actions) {
   bind(node, '[data-a=create]', () => actions.create(null));
   bind(node, '[data-a=join]', actions.join);
   bind(node, '[data-a=name]', () => showNameEditor(progress.name, actions.setName));
+  bind(node, '[data-a=quests]', actions.quests);
   bind(node, '[data-a=skins]', actions.skins);
   bind(node, '[data-a=upgrades]', actions.upgrades);
   bind(node, '[data-a=settings]', () => showSettings(actions.resetProgress));
@@ -426,6 +428,87 @@ export function showResult(res, actions) {
   bind(node, '[data-a=exit]', actions.exit);
   show(node);
   return { againBtn };
+}
+
+// ================================================================ MISSÕES
+// tab: 'daily' | 'general' | 'ach'
+export function showQuests(q, tab, actions) {
+  const bar = (p, goal) => `
+    <div class="q-bar"><div class="q-fill" style="width:${Math.min(100, (p / goal) * 100)}%"></div></div>`;
+
+  const missionRow = (m) => `
+    <div class="q-row ${m.done ? 'done' : ''}">
+      <div class="q-emoji">${m.emoji}</div>
+      <div class="q-body">
+        <div class="q-text">${esc(m.text)}</div>
+        ${bar(m.progress, m.goal)}
+        <div class="q-sub">${nf(m.progress)} / ${nf(m.goal)}</div>
+      </div>
+      ${m.claimed
+        ? '<div class="q-ok">✓</div>'
+        : m.done
+          ? `<button class="q-claim" data-claim="${m.id}">🪙 ${m.reward}</button>`
+          : `<div class="q-prize">🪙 ${m.reward}</div>`}
+    </div>`;
+
+  const achRow = (a) => `
+    <div class="q-row ${a.done ? 'done' : 'locked'}">
+      <div class="q-emoji">${a.done ? a.emoji : '🔒'}</div>
+      <div class="q-body">
+        <div class="q-text">${esc(a.name)}</div>
+        <div class="q-sub">${esc(a.desc)}</div>
+        ${a.done ? '' : bar(a.progress, a.goal)}
+      </div>
+      ${a.done ? '<div class="q-ok">✓</div>' : `<div class="q-prize">🪙 ${a.reward}</div>`}
+    </div>`;
+
+  const lists = {
+    daily: q.daily.length ? q.daily.map(missionRow).join('') : '<div class="empty-rooms">Sem missões hoje.</div>',
+    general: q.general.map(missionRow).join(''),
+    ach: q.achievements.map(achRow).join(''),
+  };
+  const doneAch = q.achievements.filter(a => a.done).length;
+
+  const node = el(`
+    <div class="screen hub">
+      <h2>MISSÕES</h2>
+      <div class="q-stats">
+        <span>🏅 ${doneAch}/${q.achievements.length} conquistas</span>
+        <span>📅 ${q.daysPlayed} ${q.daysPlayed === 1 ? 'dia' : 'dias'}</span>
+      </div>
+      <div class="filters">
+        <button class="filter ${tab === 'daily' ? 'on' : ''}" data-tab="daily">Diárias</button>
+        <button class="filter ${tab === 'general' ? 'on' : ''}" data-tab="general">Gerais</button>
+        <button class="filter ${tab === 'ach' ? 'on' : ''}" data-tab="ach">Conquistas</button>
+      </div>
+      ${tab === 'daily' ? '<p class="hint">Trocam todo dia à meia-noite.</p>' : ''}
+      <div class="q-list">${lists[tab]}</div>
+      <button class="btn ghost" data-a="back">VOLTAR</button>
+    </div>
+  `);
+
+  bindAll(node, '[data-tab]', (b) => actions.tab(b.dataset.tab));
+  bindAll(node, '[data-claim]', (b) => actions.claim(b.dataset.claim));
+  bind(node, '[data-a=back]', actions.back);
+  show(node);
+}
+
+// Celebração no fim da partida.
+export function showRewards({ unlocked, claimedNow }, onClose) {
+  const items = [
+    ...unlocked.map(a => `
+      <div class="rw-row">
+        <div class="rw-emoji">${a.emoji}</div>
+        <div><b>${esc(a.name)}</b><div class="q-sub">Conquista desbloqueada · 🪙 ${a.reward}</div></div>
+      </div>`),
+    ...claimedNow.map(m => `
+      <div class="rw-row">
+        <div class="rw-emoji">${m.emoji}</div>
+        <div><b>${esc(m.text)}</b><div class="q-sub">Missão concluída · 🪙 ${m.reward}</div></div>
+      </div>`),
+  ].join('');
+  const m = modal(`<h3>🎉 RECOMPENSAS</h3>${items}<button class="btn green" data-a="ok">MARAVILHA</button>`);
+  bind(m, '[data-a=ok]', () => { m.remove(); onClose && onClose(); });
 }
 
 // ================================================================ PERSONAGENS

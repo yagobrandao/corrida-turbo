@@ -19,14 +19,13 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
-/* Cinto extra para iOS instalado na tela de início: se o env() falhar no
-   modo standalone, o piso entra por CSS mesmo, antes de qualquer JS.
-   O @supports de -webkit-touch-callout só é verdadeiro no iOS, então o
-   Android instalado não ganha padding indevido. */
+/* iOS instalado na tela de início: com a barra de status opaca ("black" no
+   index.html) o próprio iOS já reserva a faixa do relógio, então o topo não
+   precisa de compensação. Embaixo a página ainda vai até a borda, e a barra
+   de gesto continua pedindo folga. */
 @supports (-webkit-touch-callout: none) {
   @media (display-mode: standalone) {
     :root {
-      --safe-top: max(env(safe-area-inset-top, 0px), 54px);
       --safe-bottom: max(env(safe-area-inset-bottom, 0px), 18px);
     }
   }
@@ -510,6 +509,82 @@ html, body {
 }
 .up-buy.poor { filter: grayscale(.7) brightness(.7); }
 .up-max { font-size: 12px; font-weight: 900; color: var(--gold); flex-shrink: 0; }
+
+/* ================= missões e conquistas ================= */
+.q-stats {
+  display: flex;
+  gap: 14px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.q-list { width: min(430px, 100%); display: flex; flex-direction: column; gap: 7px; }
+.q-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: var(--card);
+  border-radius: 13px;
+  padding: 10px 12px;
+  text-align: left;
+}
+.q-row.done { background: var(--card2); }
+.q-row.locked { opacity: .6; }
+.q-emoji { font-size: 24px; width: 30px; text-align: center; flex-shrink: 0; }
+.q-body { flex: 1; min-width: 0; }
+.q-text { font-size: 13.5px; font-weight: 800; line-height: 1.25; }
+.q-sub { font-size: 11px; color: var(--muted); font-weight: 700; margin-top: 2px; }
+.q-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(0,0,0,.3);
+  overflow: hidden;
+  margin-top: 5px;
+}
+.q-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, #43d68c, #ffd23e); }
+.q-prize { font-size: 12px; font-weight: 800; color: var(--muted); flex-shrink: 0; }
+.q-ok { font-size: 20px; color: var(--green); flex-shrink: 0; }
+.q-claim {
+  background: linear-gradient(180deg, #43d68c 0%, #23a563 100%);
+  border: 0;
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 800;
+  border-radius: 9px;
+  padding: 8px 11px;
+  cursor: pointer;
+  flex-shrink: 0;
+  box-shadow: 0 3px 0 #177a48;
+  animation: claimPulse 1.4s ease-in-out infinite;
+}
+.q-claim:active { transform: translateY(2px); box-shadow: 0 1px 0 #177a48; }
+@keyframes claimPulse { 50% { filter: brightness(1.18); } }
+
+.badge {
+  display: inline-block;
+  min-width: 16px;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--red);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 16px;
+  text-align: center;
+}
+
+.rw-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--card2);
+  border-radius: 12px;
+  padding: 10px 13px;
+  text-align: left;
+}
+.rw-emoji { font-size: 28px; flex-shrink: 0; }
+.rw-row b { font-size: 13.5px; }
 
 /* ================= modais ================= */
 .modal-back {

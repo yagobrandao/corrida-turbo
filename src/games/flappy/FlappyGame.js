@@ -148,6 +148,7 @@ export function createGame(ctx) {
         score: sc || 0, coins: Math.round((sc || 0) / 2),
         detail: `${sc || 0} obstáculos`,
         sort: sc || 0,
+        metrics: p.slot === mySlot ? { pipes: sc || 0 } : undefined,
       };
     });
     onFinish(rows);

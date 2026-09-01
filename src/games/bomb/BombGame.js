@@ -288,6 +288,9 @@ export function createGame(ctx) {
         score: pts, coins: Math.round(pts / 12),
         detail: `☠️${kills.get(p.slot) || 0} 💣${myStats ? myStats.bombs : st.bombs}`,
         sort: pts,
+        metrics: p.slot === mySlot
+          ? { kills: kills.get(p.slot) || 0, crates: myStats ? myStats.crates : 0, bombs: myStats ? myStats.bombs : 0 }
+          : undefined,
       };
     });
     onFinish(rows);

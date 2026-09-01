@@ -18,6 +18,7 @@ import { buildTextures } from './games/runner/textures.js';
 import { POWERUPS, MAX_LEVEL, upgradeCost, effectiveValue } from './games/runner/powerups.js';
 import { sfx, unlockAudio, startMusic, stopMusic, getPrefs } from './core/audio.js';
 import * as store from './core/storage.js';
+import * as quests from './core/quests.js';
 import * as ui from './ui/screens.js';
 import * as gameui from './ui/gameui.js';
 
@@ -69,8 +70,27 @@ function ensurePhaser() {
 // ------------------------------------------------------------------
 function showHub() {
   phase = 'hub';
-  ui.showHub({ progress: store.getProgress(), ...hubState }, hubActions());
+  ui.showHub({
+    progress: store.getProgress(),
+    pendingQuests: quests.pendingCount(),
+    ...hubState,
+  }, hubActions());
   refreshRooms();
+}
+
+// Missões: a tela é burra, o motor está em core/quests.js
+let questTab = 'daily';
+function showQuestsScreen() {
+  phase = 'quests';
+  ui.showQuests(quests.getQuests(), questTab, {
+    tab: (t) => { questTab = t; showQuestsScreen(); },
+    claim: (id) => {
+      const reward = quests.claim(id);
+      if (reward) { sfx.coin(); ui.toast(`+🪙 ${reward} resgatadas!`); }
+      showQuestsScreen();
+    },
+    back: () => showHub(),
+  });
 }
 
 function hubActions() {
@@ -86,9 +106,10 @@ function hubActions() {
       broadcastIdentity();
       showHub();
     },
+    quests: () => showQuestsScreen(),
     skins: () => showSkinsScreen(),
     upgrades: () => showUpgrades(),
-    resetProgress: () => { store.resetProgress(); showHub(); },
+    resetProgress: () => { store.resetProgress(); quests.resetQuests(); showHub(); },
   };
 }
 
@@ -360,6 +381,18 @@ function onMatchEnd(rows) {
     dist: 0, score: mine.score || 0, coins: mine.coins || 0, speed: 0, won: iWon,
   });
 
+  // missões e conquistas: um evento normalizado, as regras moram em quests.js
+  const quest = quests.recordMatch({
+    gameId: match.gameId,
+    won: iWon,
+    score: mine.score || 0,
+    coins: mine.coins || 0,
+    players: rows.length,
+    solo,
+    metrics: mine.metrics || {},
+    totalGames: GAMES.length,
+  });
+
   const cleanup = () => {
     if (match && match.game) match.game.destroy();
     if (match && match.bus) match.bus.dispose();
@@ -392,6 +425,13 @@ function onMatchEnd(rows) {
       },
       exit: () => leaveRoom(),
     });
+
+    // conquistas destravadas entram sozinhas; missões prontas só avisam
+    if (quest.unlocked.length) {
+      setTimeout(() => ui.showRewards({ unlocked: quest.unlocked, claimedNow: [] }), 700);
+    } else if (quest.ready.length) {
+      ui.toast(`🎯 ${quest.ready.length} ${quest.ready.length === 1 ? 'missão pronta' : 'missões prontas'} para resgate!`);
+    }
   }, 1000);
 }
 
@@ -616,10 +656,9 @@ function fixSafeArea() {
     let top = measure('padding-top');
     let bottom = measure('padding-bottom');
     if (iOS && standalone) {
-      // telas "altas" (>=780 pontos) têm notch/ilha: piso de 59px em cima e
-      // 24px embaixo (barra de gesto); as antigas só a barra de status
+      // o topo é reservado pelo próprio iOS (barra de status opaca);
+      // só a barra de gesto de baixo precisa de piso garantido
       const tall = Math.max(screen.width, screen.height) >= 780;
-      top = Math.max(top, tall ? 59 : 20);
       bottom = Math.max(bottom, tall ? 24 : 0);
     }
     if (top > 0) document.documentElement.style.setProperty('--safe-top', top + 'px');

@@ -357,6 +357,9 @@ export function createGame(ctx) {
         score: pts, coins: Math.round(pts / 40),
         detail: `👹${captures.get(p.slot) || 0} · 🏃${fleeSecs.get(p.slot) || 0}s`,
         sort: pts,
+        metrics: p.slot === mySlot
+          ? { captures: captures.get(p.slot) || 0, fleeTime: fleeSecs.get(p.slot) || 0 }
+          : undefined,
       };
     });
     onFinish(rows);

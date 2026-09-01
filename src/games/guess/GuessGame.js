@@ -22,6 +22,7 @@ export function createGame(ctx) {
   const totalRounds = parseInt((settings && settings.rounds) || '3', 10);
 
   const totals = new Map(players.map(p => [p.slot, 0]));  // pontos acumulados
+  const hits = new Map(players.map(p => [p.slot, 0]));    // palavras acertadas
   const bestProx = new Map();   // slot -> melhor proximidade na rodada
   const attempts = new Map();   // slot -> tentativas na rodada
   const lastAt = new Map();     // anti-spam (host)
@@ -174,6 +175,7 @@ export function createGame(ctx) {
 
   function onWin(slot, word, pts, scores) {
     for (const [sl, v] of scores) totals.set(sl, v);
+    hits.set(slot, (hits.get(slot) || 0) + 1);
     setInput(false);
     const mine = slot === mySlot;
     addFeed(`<span class="gi-sys">🎉 <b style="color:${slotHex(slot)}">${esc(nameOf(slot))}</b> acertou: <b>${esc(word).toUpperCase()}</b> (+${pts} pts)</span>`, 'sys win');
@@ -240,6 +242,7 @@ export function createGame(ctx) {
       coins: Math.round((totals.get(p.slot) || 0) / 30),
       detail: `${totalRounds} rodadas`,
       sort: totals.get(p.slot) || 0,
+      metrics: p.slot === mySlot ? { correct: hits.get(p.slot) || 0 } : undefined,
     }));
     onFinish(rows);
   }

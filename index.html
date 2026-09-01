@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
   <meta name="theme-color" content="#141a33" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <!-- "black" (e NÃO black-translucent): com translucent o iOS estica a página
+       por baixo do relógio e da Dynamic Island, e aí depender de
+       env(safe-area-inset-top) para compensar é frágil. Com "black" o próprio
+       iOS reserva a faixa da barra de status e a página começa abaixo dela. -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
   <meta name="mobile-web-app-capable" content="yes" />
   <title>Party Hub</title>
   <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
