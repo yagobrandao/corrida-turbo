@@ -31,12 +31,12 @@ html, body {
   touch-action: manipulation;
 }
 
+/* a centralização é feita pelo Phaser (CENTER_BOTH), que aplica margem no
+   canvas — centralizar aqui também empurraria o jogo para o lado */
 #game-root {
   position: fixed;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: hidden;
   touch-action: none;
 }
 #game-root canvas { touch-action: none; }
@@ -59,8 +59,8 @@ html, body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 18px;
-  padding: calc(24px + var(--safe-top)) 24px calc(28px + var(--safe-bottom));
+  gap: 14px;
+  padding: calc(20px + var(--safe-top)) 20px calc(24px + var(--safe-bottom));
   background: radial-gradient(120% 90% at 50% 0%, var(--bg2) 0%, var(--bg1) 70%);
   text-align: center;
 }
@@ -95,7 +95,7 @@ html, body {
 .btn {
   display: block;
   width: min(320px, 86vw);
-  padding: 17px 20px;
+  padding: 15px 20px;
   border: 0;
   border-radius: var(--radius);
   font-size: 18px;
@@ -124,8 +124,8 @@ html, body {
 /* cartão de código da sala */
 .room-card {
   background: var(--card);
-  border-radius: 22px;
-  padding: 22px 26px;
+  border-radius: 20px;
+  padding: 14px 20px;
   box-shadow: 0 10px 28px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.06);
   display: flex;
   flex-direction: column;
@@ -134,19 +134,19 @@ html, body {
   width: min(320px, 86vw);
 }
 .room-code {
-  font-size: 46px;
+  font-size: 36px;
   font-weight: 900;
-  letter-spacing: 10px;
+  letter-spacing: 8px;
   padding-left: 10px; /* compensa o letter-spacing do último char */
   color: var(--gold);
   text-shadow: 0 3px 0 rgba(0,0,0,.4);
 }
 .room-card img.qr {
-  width: 190px;
-  height: 190px;
-  border-radius: 14px;
+  width: 148px;
+  height: 148px;
+  border-radius: 12px;
   background: #fff;
-  padding: 8px;
+  padding: 6px;
 }
 .copy-link {
   font-size: 14px;
@@ -186,6 +186,105 @@ html, body {
   animation: dots 1.2s steps(4) infinite;
 }
 @keyframes dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75% { content: '...'; } }
+
+/* grade de jogadores (até 5) */
+.players {
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: 340px;
+}
+.players .player-slot {
+  width: 84px;
+  padding: 9px 6px;
+  gap: 3px;
+}
+.players .player-slot .avatar { font-size: 26px; }
+.players .player-slot .pname { font-size: 13px; }
+.players .player-slot .pstatus { font-size: 11px; }
+.player-slot.empty { opacity: .4; border-style: dashed; border-color: #39426f; }
+
+/* seletor de dificuldade */
+.diff-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  width: min(330px, 88vw);
+}
+.diff-opt {
+  background: var(--card);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  padding: 8px 3px;
+  cursor: pointer;
+  transition: transform .06s, border-color .15s;
+}
+/* a descrição só aparece na dificuldade escolhida, para a grade
+   caber junto com os 5 jogadores numa tela de celular */
+.diff-opt .dd { display: none; }
+.diff-opt.on .dd { display: block; }
+.diff-opt:active { transform: scale(.97); }
+.diff-opt.on { border-color: var(--gold); background: var(--card2); }
+.diff-opt.locked { opacity: .5; pointer-events: none; }
+.diff-opt .de { font-size: 20px; }
+.diff-opt .dn { font-size: 12.5px; font-weight: 800; }
+.diff-opt .dd { font-size: 10px; color: var(--muted); line-height: 1.2; margin-top: 2px; }
+.diff-readonly {
+  background: var(--card);
+  border-radius: 14px;
+  padding: 10px 18px;
+  font-weight: 800;
+  font-size: 15px;
+}
+
+/* grade de skins */
+.skin-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  width: min(330px, 88vw);
+}
+.skin-card {
+  background: var(--card);
+  border: 2px solid transparent;
+  border-radius: 14px;
+  padding: 10px 4px 8px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: transform .06s, border-color .15s;
+}
+.skin-card:active { transform: scale(.96); }
+.skin-card.on { border-color: var(--accent); background: var(--card2); }
+.skin-card.locked { opacity: .55; }
+.skin-card img { width: 44px; height: 60px; object-fit: contain; }
+.skin-card .sn { font-size: 12px; font-weight: 800; }
+.skin-card .sc { font-size: 10.5px; color: var(--muted); font-weight: 700; }
+.skin-card.locked .sc { color: var(--gold); }
+
+/* painel de estatísticas */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: min(320px, 86vw);
+}
+.stat-box {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 10px;
+}
+.stat-box .sv { font-size: 19px; font-weight: 900; color: var(--gold); }
+.stat-box .sl { font-size: 11px; color: var(--muted); font-weight: 700; letter-spacing: .5px; }
+.coin-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 17px;
+  font-weight: 900;
+  color: var(--gold);
+}
 
 /* input do código */
 .code-input {
@@ -312,17 +411,54 @@ html, body {
   text-shadow: 0 2px 0 rgba(0,0,0,.5);
 }
 .hud-sub { display: flex; gap: 14px; font-size: 16px; font-weight: 800; text-shadow: 0 2px 0 rgba(0,0,0,.5); }
-.hud-opp {
-  background: rgba(20, 26, 51, .75);
-  border: 2px solid var(--accent2);
-  border-radius: 14px;
-  padding: 8px 12px;
-  text-align: right;
+/* velocímetro */
+.speedo { margin-top: 8px; width: 130px; }
+.speedo-bar {
+  height: 7px;
+  border-radius: 4px;
+  background: rgba(20, 26, 51, .7);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.15);
+}
+#speedo-fill {
+  height: 100%;
+  width: 0%;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #43d68c 0%, #ffd23e 55%, #e8483f 100%);
+  transition: width .12s linear;
+}
+.speedo-num {
+  font-size: 19px;
+  font-weight: 900;
+  margin-top: 2px;
+  text-shadow: 0 2px 0 rgba(0,0,0,.5);
+}
+.speedo-num small { font-size: 11px; font-weight: 700; color: var(--muted); }
+.speedo-num.turbo { color: var(--gold); }
+
+/* placar dos rivais */
+.hud-rivals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-end;
+  max-width: 46vw;
+}
+.rival-chip {
+  background: rgba(20, 26, 51, .78);
+  border-left: 4px solid var(--accent2);
+  border-radius: 10px;
+  padding: 5px 9px;
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
+  text-align: right;
+  min-width: 128px;
 }
-.hud-opp-name { font-size: 13px; font-weight: 800; color: var(--accent2); }
-.hud-opp-info { font-size: 13.5px; font-weight: 700; display: flex; gap: 10px; }
+.rival-chip.dead { opacity: .45; }
+.rival-chip .rn { font-size: 11.5px; font-weight: 800; line-height: 1.2; }
+.rival-chip .rd { font-size: 12.5px; font-weight: 700; }
+.rival-chip .rd.ahead { color: var(--red); }
+.rival-chip .rd.behind { color: var(--green); }
 .hud-msg {
   position: absolute;
   top: 34%;

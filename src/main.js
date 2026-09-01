@@ -1,39 +1,56 @@
 // Orquestrador: liga UI (screens), rede (NetSession) e jogo (GameScene).
-// O HOST é autoritativo: sorteia a seed, decide início, fim e resultado.
+//
+// O HOST é autoritativo: mantém o roster, escolhe a dificuldade, sorteia a
+// seed, dá a largada, consolida o estado de todo mundo num snapshot único e
+// decreta o resultado. Os convidados só mandam o próprio estado e obedecem.
 import Phaser from 'phaser';
 import QRCode from 'qrcode';
 import GameScene from './game/GameScene.js';
 import { NetSession, normalizeCode } from './net/peer.js';
-import { MSG } from './net/protocol.js';
+import { MSG, packState, unpackState } from './net/protocol.js';
 import { makeSeed } from './core/rng.js';
-import { GAME_W, GAME_H, GRACE_AFTER_DEATH } from './core/config.js';
+import {
+  GAME_W, GAME_H, GRACE_AFTER_DEATH, MAX_PLAYERS, STATE_HZ,
+  SLOT_NAMES, DEFAULT_DIFFICULTY, getDifficulty,
+} from './core/config.js';
+import { buildTextures } from './game/textures.js';
+import { textureKey, resolveSkin, DEFAULT_SKIN } from './game/skins.js';
 import { sfx, unlockAudio, startMusic, stopMusic, getPrefs } from './game/audio.js';
+import * as store from './core/storage.js';
 import * as ui from './ui/screens.js';
 
-let game = null;          // Phaser.Game (criado sob demanda)
-let scene = null;         // instância da GameScene
-let net = null;           // NetSession ativa (null = offline)
+let game = null;
+let scene = null;
+let net = null;
 let phase = 'menu';
 let room = { code: null, qr: null, link: null };
 
-// estado da partida atual
+// Sala: no host é a fonte da verdade; no convidado é um espelho do ROSTER.
+let lobby = { players: new Map(), difficulty: DEFAULT_DIFFICULTY, mySlot: 0 };
+
+// Partida em andamento.
 let m = null;
+
 function resetMatch(mode) {
-  if (m && m.graceTimer) clearTimeout(m.graceTimer);
+  if (m) { clearTimeout(m.graceTimer); clearInterval(m.snapTimer); }
   m = {
-    mode,                       // 'solo' | 'net'
-    selfReady: false, oppReady: false,
-    selfDead: false, oppDead: false,
-    selfStats: null, oppStats: null,
-    oppLast: { d: 0, sc: 0, co: 0 },
-    ended: false, graceTimer: null,
-    selfAgain: false, oppAgain: false,
+    mode,                    // 'solo' | 'net'
+    seed: 0,
+    difficulty: lobby.difficulty,
+    roster: [],              // [{slot, name, skin}] participantes desta corrida
+    states: new Map(),       // host: slot -> último estado recebido
+    finals: new Map(),       // slot -> stats finais de quem já morreu
+    selfDead: false,
+    ended: false,
+    graceTimer: null,
+    snapTimer: null,
+    againVotes: new Set(),
     resultCtl: null,
   };
 }
 
-const myName = () => (net && net.role === 'client' ? 'Jogador 2' : 'Jogador 1');
-const oppName = () => (net && net.role === 'client' ? 'Jogador 1' : 'Jogador 2');
+const mySlot = () => (net ? (net.role === 'host' ? 0 : lobby.mySlot) : 0);
+const slotName = (slot) => SLOT_NAMES[slot] || `Jogador ${slot + 1}`;
 
 // ------------------------------------------------------------------
 // Phaser
@@ -55,8 +72,12 @@ function ensureGame() {
       scene: [],
     });
     game.events.once('ready', () => {
+      // cena mínima só para gerar as texturas uma vez — assim a vitrine de
+      // personagens consegue mostrar os bonecos antes da primeira corrida
+      game.scene.add('boot', {
+        create() { buildTextures(this); this.scene.stop(); resolve(); },
+      }, true);
       game.scene.add('run', GameScene, false);
-      resolve();
     });
   });
   return gameReady;
@@ -69,115 +90,199 @@ async function launchScene(data) {
     // o listener PRECISA ser registrado antes do start/restart:
     // o create pode disparar de forma síncrona
     sc.events.once('create', () => { scene = sc; resolve(); });
-    if (sc.scene.isActive() || sc.scene.isPaused()) {
-      sc.scene.restart(data);
-    } else {
-      game.scene.start('run', data);
-    }
+    if (sc.scene.isActive() || sc.scene.isPaused()) sc.scene.restart(data);
+    else game.scene.start('run', data);
   });
 }
 
-// hooks que a cena chama de volta
 function sceneHooks() {
   return {
-    sendState: (st) => { if (net) net.send({ t: MSG.STATE, ...st }); },
+    sendState: (st) => hostOrClientState(st),
     updateHUD: (s) => ui.updateHUD(s),
-    onHit: (lives) => { if (net) net.send({ t: MSG.HIT, lv: lives }); },
+    onHit: () => {},
     onDead: (stats) => handleLocalDeath(stats),
   };
 }
 
+// O host guarda o próprio estado junto com o dos convidados;
+// o convidado manda para o host.
+function hostOrClientState(st) {
+  if (!net) return;
+  if (net.role === 'host') m.states.set(0, st);
+  else net.send({ t: MSG.STATE, ...st });
+}
+
 // ------------------------------------------------------------------
-// Fluxo de partida
+// Partida
 // ------------------------------------------------------------------
-async function prepareMatch(seed) {
+async function prepareMatch({ seed, difficulty, roster }) {
   const isNet = !!(net && net.connected);
   resetMatch(isNet ? 'net' : 'solo');
+  m.seed = seed;
+  m.difficulty = difficulty;
+  m.roster = roster || [];
+
   phase = 'countdown';
   ui.hideUI();
-  await launchScene({ seed, isNet, hooks: sceneHooks(), oppName: oppName() });
-  ui.showHUD(isNet ? oppName() : null);
+
+  const me = mySlot();
+  const rivals = m.roster
+    .filter(p => p.slot !== me)
+    .map(p => ({ slot: p.slot, name: p.name, skin: p.skin }));
+
+  const progress = store.getProgress();
+  await launchScene({
+    seed, isNet, difficulty,
+    hooks: sceneHooks(),
+    mySkin: resolveSkin(progress.skin, progress.totalCoins).id,
+    rivals,
+  });
+
+  ui.showHUD(rivals.length > 0);
   startMusic();
+
+  if (isNet && net.role === 'host') {
+    clearInterval(m.snapTimer);
+    m.snapTimer = setInterval(hostSendSnapshot, 1000 / STATE_HZ);
+  }
+
   ui.runCountdown(() => {
     phase = 'running';
     scene.beginRun();
   });
 }
 
+function hostSendSnapshot() {
+  if (!net || net.role !== 'host' || m.ended) return;
+  const packed = [];
+  for (const [slot, st] of m.states) packed.push(packState(slot, st));
+  if (!packed.length) return;
+  net.broadcast({ t: MSG.SNAP, p: packed });
+  // o host consome o próprio snapshot: sem isso ele transmitiria a corrida
+  // para todo mundo e veria os rivais congelados na largada
+  if (scene && phase === 'running') {
+    scene.applySnapshot(packed.map(unpackState).filter(s => s.slot !== 0));
+  }
+}
+
 function hostStartMatch() {
   const seed = makeSeed();
-  net.send({ t: MSG.START, seed });
-  // compensa metade da latência para os dois countdowns ficarem alinhados
-  setTimeout(() => prepareMatch(seed), Math.min(net.rtt / 2, 300));
+  const roster = rosterList().map(p => ({ slot: p.slot, name: p.name, skin: p.skin }));
+  const payload = { seed, difficulty: lobby.difficulty, roster };
+  net.broadcast({ t: MSG.START, ...payload });
+  // compensa metade da latência média para os countdowns ficarem alinhados
+  setTimeout(() => prepareMatch(payload), Math.min(net.avgRtt() / 2, 300));
 }
 
 function handleLocalDeath(stats) {
   m.selfDead = true;
-  m.selfStats = stats;
+  const me = mySlot();
+  m.finals.set(me, stats);
 
   if (m.mode === 'solo') {
-    setTimeout(() => finishMatch({
-      win: null,
-      rows: [{ name: 'Você', ...toRow(stats), win: false, you: false }],
-      title: 'FIM DA CORRIDA',
-      trophy: '🏁',
-      canRematch: false,
-      solo: true,
-      exitLabel: 'VOLTAR AO MENU',
-    }), 1200);
+    setTimeout(() => finishSolo(stats), 1200);
     return;
   }
 
-  net.send({ t: MSG.DEAD, ...stats });
-  if (!m.oppDead) ui.hudMessage('💀 Você caiu! Acompanhe seu rival…');
-  if (net.role === 'host') hostCheckEnd();
+  if (net.role === 'host') {
+    const st = m.states.get(0);
+    if (st) m.states.set(0, { ...st, dead: true });
+    hostCheckEnd();
+  } else {
+    net.send({ t: MSG.DEAD, ...stats });
+  }
+  if (!allRivalsDead()) ui.hudMessage('💀 Você caiu! Acompanhe a corrida…');
 }
 
+function allRivalsDead() {
+  return m.roster.filter(p => p.slot !== mySlot()).every(p => m.finals.has(p.slot));
+}
+
+// ---- fim de partida (só o host decide) ----
 function hostCheckEnd() {
-  if (m.ended) return;
-  if (m.selfDead && m.oppDead) { hostEndMatch(); return; }
-  if ((m.selfDead || m.oppDead) && !m.graceTimer) {
-    // o sobrevivente ganha alguns segundos para ampliar (ou virar) o placar
+  if (m.ended || !net || net.role !== 'host') return;
+  const alive = m.roster.filter(p => !m.finals.has(p.slot));
+  if (alive.length === 0) { hostEndMatch(); return; }
+  // primeiro morto dispara a contagem: quem sobrou tem alguns segundos
+  // para ampliar a vantagem antes do apito final
+  if (m.finals.size > 0 && !m.graceTimer) {
     m.graceTimer = setTimeout(hostEndMatch, GRACE_AFTER_DEATH * 1000);
   }
 }
 
 function hostEndMatch() {
   if (m.ended) return;
-  const h = m.selfDead ? m.selfStats : scene.getStats();
-  const c = m.oppDead ? m.oppStats : m.oppLast;
-  const win = h.d > c.d ? 'host' : c.d > h.d ? 'client' : 'tie';
-  net.send({ t: MSG.END, win, h, c });
-  onMatchEnd({ win, h, c });
+  const rows = m.roster.map(p => {
+    const fin = m.finals.get(p.slot);
+    const live = m.states.get(p.slot);
+    const s = fin || (live ? { d: Math.floor(live.d), sc: Math.floor(live.sc), co: live.co || 0 } : { d: 0, sc: 0, co: 0 });
+    return { slot: p.slot, name: p.name, ...s };
+  }).sort((a, b) => b.d - a.d);
+
+  // empate no topo (ou ninguém saiu do lugar) não tem vencedor
+  const tied = rows.length > 1 && rows[0].d === rows[1].d;
+  const win = rows.length && rows[0].d > 0 && !tied ? rows[0].slot : -1;
+  net.broadcast({ t: MSG.END, rows, win });
+  onMatchEnd({ rows, win });
 }
 
-function toRow(s) {
-  return { dist: Math.floor(s.d || 0), score: Math.floor(s.sc || 0), coins: s.co || 0 };
-}
-
-function onMatchEnd({ win, h, c }) {
+function onMatchEnd({ rows, win }) {
   if (m.ended) return;
   m.ended = true;
   clearTimeout(m.graceTimer);
+  clearInterval(m.snapTimer);
   if (scene) scene.freezeRun();
 
-  const iAmHost = net.role === 'host';
-  const iWon = win === (iAmHost ? 'host' : 'client');
-  const tie = win === 'tie';
-  if (tie) sfx.powerup(); else if (iWon) sfx.win(); else sfx.lose();
+  const me = mySlot();
+  const mine = rows.find(r => r.slot === me) || { d: 0, sc: 0, co: 0 };
+  const iWon = win === me;
+  const noWinner = win < 0;
+  if (iWon) sfx.win(); else if (noWinner) sfx.powerup(); else sfx.lose();
 
-  const rows = [
-    { name: 'Jogador 1', ...toRow(h), win: win === 'host', you: iAmHost },
-    { name: 'Jogador 2', ...toRow(c), win: win === 'client', you: !iAmHost },
-  ].sort((a, b) => b.dist - a.dist);
+  const records = store.recordRace({
+    dist: mine.d, score: mine.sc, coins: mine.co,
+    speed: scene ? Math.round(scene.topSpeed * 3.6) : 0,
+    won: iWon,
+  });
 
   finishMatch({
-    rows,
-    title: tie ? 'EMPATE!' : (win === 'host' ? 'JOGADOR 1' : 'JOGADOR 2'),
-    trophy: tie ? '🤝' : '🏆',
-    note: iWon ? 'Você venceu! 🎉' : tie ? '' : 'Quase! Peça revanche.',
+    rows: rows.map(r => ({
+      name: r.name, dist: r.d, score: r.sc, coins: r.co,
+      win: r.slot === win, you: r.slot === me,
+    })),
+    title: noWinner ? 'EMPATE!' : slotName(win).toUpperCase(),
+    trophy: noWinner ? '🤝' : (iWon ? '🏆' : '🏁'),
+    note: noWinner ? 'Ninguém abriu vantagem.' : (iWon ? 'Você venceu! 🎉' : 'Peça revanche!'),
+    records: recordLabels(records, mine),
+    earned: mine.co,
     canRematch: true,
+    isHost: net && net.role === 'host',
   });
+}
+
+function finishSolo(stats) {
+  const records = store.recordRace({
+    dist: stats.d, score: stats.sc, coins: stats.co,
+    speed: stats.kmh, won: false,
+  });
+  finishMatch({
+    rows: [{ name: 'Você', dist: stats.d, score: stats.sc, coins: stats.co, win: false, you: false }],
+    title: 'FIM DA CORRIDA',
+    trophy: '🏁',
+    records: recordLabels(records, stats),
+    earned: stats.co,
+    canRematch: true,
+    solo: true,
+    exitLabel: 'VOLTAR AO MENU',
+  });
+}
+
+function recordLabels(records, stats) {
+  const out = [];
+  if (records.dist) out.push(`Novo recorde de distância: ${stats.d.toLocaleString('pt-BR')} m`);
+  if (records.score) out.push(`Nova pontuação máxima: ${stats.sc.toLocaleString('pt-BR')}`);
+  if (records.speed && stats.kmh) out.push(`Nova velocidade máxima: ${stats.kmh} km/h`);
+  return out;
 }
 
 function finishMatch(res) {
@@ -188,108 +293,185 @@ function finishMatch(res) {
     ui.hudMessage(null);
     m.resultCtl = ui.showResult(res, {
       again: () => {
-        if (res.solo) return;
-        m.selfAgain = true;
-        net.send({ t: MSG.AGAIN });
-        hostMaybeRematch();
+        if (res.solo) { prepareMatch(soloConfig()); return; }
+        if (net.role === 'host') {
+          hostStartMatch();
+        } else {
+          net.send({ t: MSG.AGAIN });
+          ui.toast('Avisando o host…');
+        }
       },
       exit: () => leaveRoom(),
     });
-    if (res.solo) {
-      // no solo, "sair da sala" é só voltar ao menu — e revanche é imediata
-      m.resultCtl = null;
-    }
   }, 900);
 }
 
-function hostMaybeRematch() {
-  if (net && net.role === 'host' && m.selfAgain && m.oppAgain) hostStartMatch();
+// ------------------------------------------------------------------
+// Roster / lobby
+// ------------------------------------------------------------------
+function rosterList() {
+  return [...lobby.players.values()].sort((a, b) => a.slot - b.slot);
 }
 
-function opponentGone() {
-  const wasPhase = phase;
-  if (wasPhase === 'running' || wasPhase === 'countdown') {
-    // W.O.: quem ficou vence
-    if (!m.ended) {
-      const iAmHost = net.role === 'host';
-      const my = m.selfDead ? m.selfStats : (scene ? scene.getStats() : { d: 0, sc: 0, co: 0 });
-      const theirs = m.oppDead ? m.oppStats : m.oppLast;
-      onMatchEnd({
-        win: iAmHost ? 'host' : 'client',
-        h: iAmHost ? my : theirs,
-        c: iAmHost ? theirs : my,
-      });
-      ui.toast('O rival desconectou 📵');
-    }
-    return;
+function hostSyncRoster() {
+  const players = rosterList().map(p => ({ slot: p.slot, name: p.name, skin: p.skin, ready: p.ready }));
+  // `you` muda por destinatário, então cada convidado recebe o seu
+  for (const slot of net.conns.keys()) {
+    net.sendTo(slot, { t: MSG.ROSTER, you: slot, players, difficulty: lobby.difficulty });
   }
-  if (wasPhase === 'result') {
-    ui.toast('O rival saiu da sala');
-    if (m && m.resultCtl && m.resultCtl.againBtn) {
-      m.resultCtl.againBtn.disabled = true;
-      m.resultCtl.againBtn.textContent = 'RIVAL SAIU';
-    }
-    return;
-  }
-  // lobby / aguardando
-  if (net && net.role === 'host') {
-    ui.toast('Jogador 2 desconectou');
-    showRoomScreen(); // volta a aguardar com o mesmo código
-  } else {
-    ui.toast('A sala foi encerrada');
-    leaveRoom();
-  }
+  if (phase === 'lobby') renderLobby();
+}
+
+function renderLobby() {
+  const me = mySlot();
+  const isHost = net.role === 'host';
+  ui.showLobby({
+    isHost,
+    code: net.code,
+    qr: isHost ? room.qr : null,
+    link: room.link,
+    maxPlayers: MAX_PLAYERS,
+    difficulty: lobby.difficulty,
+    players: rosterList().map(p => ({
+      ...p, isYou: p.slot === me, isHost: p.slot === 0,
+    })),
+  }, {
+    ready: () => {
+      const p = lobby.players.get(me);
+      if (p) p.ready = true;
+      net.send({ t: MSG.READY, v: true });
+      renderLobby();
+    },
+    start: () => {
+      if (net.conns.size === 0) { ui.toast('Espere alguém entrar na sala'); return; }
+      hostStartMatch();
+    },
+    setDifficulty: (id) => {
+      lobby.difficulty = id;
+      store.setDifficulty(id);
+      hostSyncRoster();
+    },
+    leave: () => leaveRoom(),
+  });
+}
+
+function enterLobby() {
+  phase = 'lobby';
+  renderLobby();
+  sfx.powerup();
 }
 
 // ------------------------------------------------------------------
-// Rede: criação/entrada de sala e mensagens
+// Rede
 // ------------------------------------------------------------------
 function wireNet() {
-  net.onPeerConnected = () => {
-    if (net.role === 'client') net.send({ t: MSG.HELLO, name: 'Jogador 2' });
+  const progress = store.getProgress();
+  const mySkinId = resolveSkin(progress.skin, progress.totalCoins).id;
+
+  net.onJoin = (slot) => {
+    // o registro real do jogador acontece no HELLO, que traz a skin
+    sfx.coin();
+    ui.toast(`${slotName(slot)} entrou na sala`);
   };
-  net.onPeerLeft = () => opponentGone();
 
-  net.on(MSG.HELLO, () => {           // host: jogador 2 chegou
-    net.send({ t: MSG.WELCOME, name: 'Jogador 1' });
-    enterLobby();
-  });
-  net.on(MSG.WELCOME, () => enterLobby());  // client: host confirmou
+  net.onLeave = (slot) => {
+    lobby.players.delete(slot);
+    m.states.delete(slot);
+    if (scene && phase === 'running') scene.remoteDead(slot);
+    ui.toast(`${slotName(slot)} saiu`);
+    if (phase === 'lobby' || phase === 'room') { hostSyncRoster(); renderLobby(); }
+    else if (phase === 'running' || phase === 'countdown') {
+      m.finals.set(slot, m.finals.get(slot) || lastKnown(slot));
+      hostCheckEnd();
+    }
+  };
 
-  net.on(MSG.READY, (msg) => {
-    m.oppReady = !!msg.v;
-    if (phase === 'lobby') renderLobby();
-    if (net.role === 'host' && m.selfReady && m.oppReady) hostStartMatch();
-  });
+  net.onHostGone = () => {
+    ui.toast('O host encerrou a sala');
+    leaveRoom();
+  };
 
-  net.on(MSG.START, (msg) => {        // client: host deu a largada
-    if (net.role === 'client') prepareMatch(msg.seed);
-  });
-
-  net.on(MSG.STATE, (msg) => {
-    m.oppLast = { d: msg.d, sc: msg.sc, co: msg.co };
-    if (scene && phase === 'running') scene.applyRemoteState(msg);
-  });
-
-  net.on(MSG.DEAD, (msg) => {
-    m.oppDead = true;
-    m.oppStats = { d: msg.d, sc: msg.sc, co: msg.co };
-    if (scene) scene.remoteDead();
-    if (!m.selfDead) ui.hudMessage(`💀 ${oppName()} caiu! Continue!`, 2600);
-    if (net.role === 'host') hostCheckEnd();
+  // ---- host ----
+  net.on(MSG.HELLO, (msg, slot) => {
+    lobby.players.set(slot, {
+      slot, name: slotName(slot),
+      skin: resolveSkin(msg.skin, Infinity).id,
+      ready: false,
+    });
+    hostSyncRoster();
+    if (phase === 'room' || phase === 'lobby') enterLobby();
   });
 
-  net.on(MSG.END, (msg) => {          // client: host decretou o fim
+  net.on(MSG.READY, (msg, slot) => {
+    const p = lobby.players.get(slot);
+    if (p) p.ready = !!msg.v;
+    hostSyncRoster();
+  });
+
+  net.on(MSG.SKIN, (msg, slot) => {
+    const p = lobby.players.get(slot);
+    if (p) p.skin = resolveSkin(msg.skin, Infinity).id;
+    hostSyncRoster();
+  });
+
+  net.on(MSG.STATE, (msg, slot) => {
+    m.states.set(slot, msg);
+  });
+
+  net.on(MSG.DEAD, (msg, slot) => {
+    m.finals.set(slot, { d: msg.d, sc: msg.sc, co: msg.co });
+    const st = m.states.get(slot);
+    if (st) m.states.set(slot, { ...st, dead: true });
+    if (scene) scene.remoteDead(slot);
+    if (!m.selfDead) ui.hudMessage(`💀 ${slotName(slot)} caiu!`, 2200);
+    hostCheckEnd();
+  });
+
+  net.on(MSG.AGAIN, (_msg, slot) => {
+    m.againVotes.add(slot);
+    ui.toast(`${slotName(slot)} quer revanche!`);
+  });
+
+  // ---- convidado ----
+  net.on(MSG.ROSTER, (msg) => {
+    lobby.mySlot = msg.you;
+    lobby.difficulty = msg.difficulty;
+    lobby.players = new Map(msg.players.map(p => [p.slot, p]));
+    if (phase === 'joining' || phase === 'room') enterLobby();
+    else if (phase === 'lobby') renderLobby();
+  });
+
+  net.on(MSG.START, (msg) => {
+    if (net.role === 'client') prepareMatch(msg);
+  });
+
+  net.on(MSG.SNAP, (msg) => {
+    if (!scene || phase !== 'running') return;
+    const me = mySlot();
+    scene.applySnapshot(msg.p.map(unpackState).filter(s => s.slot !== me));
+  });
+
+  net.on(MSG.END, (msg) => {
     if (net.role === 'client') onMatchEnd(msg);
   });
 
-  net.on(MSG.AGAIN, () => {
-    m.oppAgain = true;
-    if (!m.selfAgain) ui.toast(`${oppName()} quer revanche!`);
-    hostMaybeRematch();
+  net.on(MSG.FULL, () => {
+    ui.toast('Essa sala já está cheia (5 jogadores)');
+    cleanupNet();
+    showMultiplayer();
   });
 
-  net.on(MSG.LEAVE, () => opponentGone());
+  net.on(MSG.LEAVE, (_msg, slot) => {
+    if (net.role === 'host') net.dropClient(slot);
+    else leaveRoom();
+  });
+
+  return mySkinId;
+}
+
+function lastKnown(slot) {
+  const st = m.states.get(slot);
+  return st ? { d: Math.floor(st.d), sc: Math.floor(st.sc), co: st.co || 0 } : { d: 0, sc: 0, co: 0 };
 }
 
 async function createRoom() {
@@ -305,8 +487,19 @@ async function createRoom() {
       color: { dark: '#141a33', light: '#ffffff' },
     });
     room = { code, qr, link };
+
+    const progress = store.getProgress();
+    lobby = {
+      players: new Map([[0, {
+        slot: 0, name: slotName(0),
+        skin: resolveSkin(progress.skin, progress.totalCoins).id,
+        ready: true,
+      }]]),
+      difficulty: progress.diff || DEFAULT_DIFFICULTY,
+      mySlot: 0,
+    };
     resetMatch('net');
-    showRoomScreen();
+    enterLobby();
   } catch (err) {
     console.error(err);
     ui.toast('Não foi possível criar a sala. Verifique sua internet.');
@@ -315,67 +508,36 @@ async function createRoom() {
   }
 }
 
-function showRoomScreen() {
-  phase = 'room';
-  resetMatch('net');
-  ui.showRoom(room.code, room.qr, room.link, {
-    cancel: () => leaveRoom(),
-  });
-}
-
 async function joinRoom(code) {
   phase = 'joining';
   ui.showConnecting('Conectando');
   net = new NetSession();
-  wireNet();
+  const skin = wireNet();
   try {
     await net.joinRoom(code);
     resetMatch('net');
-    // o HELLO sai no onPeerConnected; o lobby abre quando chega o WELCOME
+    net.send({ t: MSG.HELLO, skin });
+    // o lobby abre quando o ROSTER chegar
   } catch (err) {
     console.error(err);
     const notFound = err && err.type === 'peer-unavailable';
     ui.toast(notFound ? 'Sala não encontrada. Confira o código.' : 'Falha ao conectar. Tente de novo.');
     cleanupNet();
-    ui.showJoin(code, joinActions());
     phase = 'join';
+    ui.showJoin(code, joinActions());
   }
-}
-
-function enterLobby() {
-  phase = 'lobby';
-  m.selfReady = false;
-  m.oppReady = false;
-  renderLobby();
-  sfx.powerup();
-}
-
-function renderLobby() {
-  ui.showLobby({
-    isHost: net.role === 'host',
-    code: net.code,
-    selfReady: m.selfReady,
-    oppReady: m.oppReady,
-  }, {
-    ready: () => {
-      m.selfReady = true;
-      net.send({ t: MSG.READY, v: true });
-      renderLobby();
-      if (net.role === 'host' && m.oppReady) hostStartMatch();
-    },
-    leave: () => leaveRoom(),
-  });
 }
 
 function cleanupNet() {
   if (net) { net.destroy(); net = null; }
   room = { code: null, qr: null, link: null };
+  lobby = { players: new Map(), difficulty: store.getProgress().diff, mySlot: 0 };
 }
 
 function leaveRoom() {
   if (net) net.send({ t: MSG.LEAVE });
   cleanupNet();
-  if (m && m.graceTimer) clearTimeout(m.graceTimer);
+  if (m) { clearTimeout(m.graceTimer); clearInterval(m.snapTimer); }
   stopMusic();
   ui.hideHUD();
   ui.hudMessage(null);
@@ -386,11 +548,34 @@ function leaveRoom() {
 // ------------------------------------------------------------------
 // Navegação
 // ------------------------------------------------------------------
+function soloConfig() {
+  return {
+    seed: makeSeed(),
+    difficulty: store.getProgress().diff || DEFAULT_DIFFICULTY,
+    roster: [],
+  };
+}
+
 function showMenu() {
   phase = 'menu';
-  ui.showMenu({
+  ui.showMenu(store.getProgress(), {
     play: () => showMultiplayer(),
-    solo: () => prepareMatch(makeSeed()),
+    solo: () => prepareMatch(soloConfig()),
+    skins: () => showSkins(),
+    resetProgress: () => { store.resetProgress(); showMenu(); },
+  });
+}
+
+async function showSkins() {
+  await ensureGame();   // as texturas precisam existir para a vitrine
+  phase = 'skins';
+  ui.showSkins(store.getProgress(), (id) => game.textures.getBase64(textureKey(id)), {
+    pick: (id) => {
+      store.setSkin(id);
+      if (net && net.connected) net.send({ t: MSG.SKIN, skin: id });
+      showSkins();
+    },
+    back: () => showMenu(),
   });
 }
 
@@ -414,25 +599,21 @@ function joinActions() {
 // Boot
 // ------------------------------------------------------------------
 function boot() {
-  // desbloqueia o áudio no primeiro gesto (regra de autoplay do Safari/Chrome)
   const unlock = () => { unlockAudio(); if (getPrefs().music) startMusic(); };
   document.addEventListener('pointerdown', unlock, { once: true });
-  // impede pinch-zoom no iOS
   document.addEventListener('gesturestart', (e) => e.preventDefault());
 
   resetMatch('solo');
 
-  // link de convite (?room=XXXXX) — vindo do QR Code ou compartilhado
   const params = new URLSearchParams(location.search);
   const inviteCode = normalizeCode(params.get('room'));
   if (inviteCode && inviteCode.length >= 4) {
-    history.replaceState(null, '', location.pathname); // evita re-entrar num refresh
+    history.replaceState(null, '', location.pathname);
     joinRoom(inviteCode);
   } else {
     showMenu();
   }
 
-  // pré-aquece o Phaser em segundo plano para a 1ª partida abrir instantânea
   ensureGame();
 }
 
@@ -440,5 +621,9 @@ boot();
 
 // gancho de inspeção para desenvolvimento (não interfere no jogo)
 if (import.meta.env.DEV) {
-  window.__ct = () => ({ phase, scene, game, net: net ? { role: net.role, code: net.code, connected: net.connected, rtt: net.rtt } : null, match: m });
+  window.__ct = () => ({
+    phase, scene, game, lobby, match: m,
+    net: net ? { role: net.role, code: net.code, slot: mySlot(), connected: net.connected, players: net.playerCount } : null,
+    progress: store.getProgress(),
+  });
 }

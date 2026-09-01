@@ -1,5 +1,7 @@
 // Todas as texturas são geradas em runtime (nada de assets externos),
 // com um traço cartoon consistente: cores chapadas + contorno escuro + brilho.
+import { SKINS, textureKey } from './skins.js';
+
 const OUTLINE = 0x1c2440;
 
 function roundRect(g, x, y, w, h, r, fill, line = OUTLINE) {
@@ -14,37 +16,104 @@ function shine(g, x, y, w, h, r) {
   g.fillRoundedRect(x + 5, y + 4, w - 10, Math.max(6, h * 0.22), r * 0.7);
 }
 
+// ---------- personagem ----------
+// Cápsula com rosto + um adereço que dá identidade a cada skin.
+const RUNNER_W = 76;
+const RUNNER_H = 104;
+const BODY_TOP = 26;
+
+function drawFeature(g, skin) {
+  const { feature, body, accent } = skin;
+  switch (feature) {
+    case 'ears':
+      g.fillStyle(OUTLINE, 1);
+      g.fillCircle(23, 21, 13);
+      g.fillCircle(53, 21, 13);
+      g.fillStyle(body, 1);
+      g.fillCircle(23, 21, 10);
+      g.fillCircle(53, 21, 10);
+      g.fillStyle(accent, 1);
+      g.fillCircle(23, 21, 5);
+      g.fillCircle(53, 21, 5);
+      break;
+    case 'antenna':
+      g.fillStyle(OUTLINE, 1);
+      g.fillRect(35, 6, 6, 24);
+      g.fillCircle(38, 8, 11);
+      g.fillStyle(accent, 1);
+      g.fillCircle(38, 8, 8);
+      g.fillStyle(0xffffff, 0.5);
+      g.fillCircle(35, 5, 3);
+      break;
+    case 'visor':
+      // faixa que cobre os olhos, desenhada depois do rosto
+      break;
+    case 'crown':
+      g.fillStyle(OUTLINE, 1);
+      g.fillTriangle(14, 30, 26, 30, 20, 6);
+      g.fillTriangle(30, 30, 46, 30, 38, 2);
+      g.fillTriangle(50, 30, 62, 30, 56, 6);
+      g.fillStyle(0xffd23e, 1);
+      g.fillTriangle(17, 28, 25, 28, 21, 11);
+      g.fillTriangle(33, 28, 45, 28, 39, 8);
+      g.fillTriangle(51, 28, 59, 28, 55, 11);
+      break;
+  }
+}
+
+function drawRunner(g, skin) {
+  g.clear();
+  drawFeature(g, skin);
+
+  roundRect(g, 10, BODY_TOP, 56, 74, 26, skin.body);
+
+  // barriga
+  g.fillStyle(skin.belly, 1);
+  g.fillRoundedRect(20, BODY_TOP + 34, 36, 32, 16);
+
+  if (skin.feature === 'visor') {
+    g.fillStyle(OUTLINE, 1);
+    g.fillRoundedRect(12, BODY_TOP + 14, 52, 22, 10);
+    g.fillStyle(skin.accent, 1);
+    g.fillRoundedRect(15, BODY_TOP + 17, 46, 16, 8);
+    g.fillStyle(0xffffff, 0.45);
+    g.fillRoundedRect(19, BODY_TOP + 20, 14, 6, 3);
+  } else {
+    // olhos
+    g.fillStyle(0xffffff, 1);
+    g.fillCircle(28, BODY_TOP + 24, 9);
+    g.fillCircle(48, BODY_TOP + 24, 9);
+    g.fillStyle(OUTLINE, 1);
+    g.fillCircle(30, BODY_TOP + 25, 4.5);
+    g.fillCircle(50, BODY_TOP + 25, 4.5);
+  }
+
+  // bochechas
+  g.fillStyle(0xffffff, 0.25);
+  g.fillCircle(22, BODY_TOP + 34, 4);
+  g.fillCircle(54, BODY_TOP + 34, 4);
+}
+
 export function buildTextures(scene) {
   const g = scene.make.graphics({ add: false });
 
-  // ---------- personagens (corpo cápsula + rosto) ----------
-  const makeRunner = (key, body, belly) => {
-    g.clear();
-    roundRect(g, 8, 6, 56, 74, 26, body);
-    // barriga
-    g.fillStyle(belly, 1);
-    g.fillRoundedRect(18, 40, 36, 32, 16);
-    // olhos
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(26, 30, 9);
-    g.fillCircle(46, 30, 9);
-    g.fillStyle(0x1c2440, 1);
-    g.fillCircle(28, 31, 4.5);
-    g.fillCircle(48, 31, 4.5);
-    // bochechas
-    g.fillStyle(0xffffff, 0.25);
-    g.fillCircle(20, 40, 4);
-    g.fillCircle(52, 40, 4);
-    g.generateTexture(key, 72, 86);
-  };
-  makeRunner('runner-p1', 0x39a9f4, 0x7fd0ff);   // azul (você)
-  makeRunner('runner-p2', 0xff8b3d, 0xffc07d);   // laranja (rival)
+  // um personagem por skin
+  for (const skin of SKINS) {
+    drawRunner(g, skin);
+    g.generateTexture(textureKey(skin.id), RUNNER_W, RUNNER_H);
+  }
 
   // ---------- sombra ----------
   g.clear();
   g.fillStyle(0x000000, 0.3);
   g.fillEllipse(30, 10, 60, 20);
   g.generateTexture('shadow', 60, 20);
+
+  // ---------- anel colorido sob o rival (tingido por slot) ----------
+  g.clear();
+  g.lineStyle(5, 0xffffff, 1);
+  g.strokeEllipse(34, 12, 58, 18);
+  g.generateTexture('ring', 68, 26);
 
   // ---------- barreira baixa (pular) ----------
   g.clear();
@@ -58,11 +127,9 @@ export function buildTextures(scene) {
 
   // ---------- barreira alta (deslizar por baixo) ----------
   g.clear();
-  // postes
   g.fillStyle(OUTLINE, 1);
   g.fillRect(2, 0, 10, 96);
   g.fillRect(92, 0, 10, 96);
-  // placa suspensa
   roundRect(g, 0, 4, 104, 40, 8, 0xf4b63a);
   g.fillStyle(OUTLINE, 0.85);
   for (let i = 0; i < 4; i++) g.fillTriangle(8 + i * 26, 40, 20 + i * 26, 40, 14 + i * 26, 16);
@@ -80,7 +147,6 @@ export function buildTextures(scene) {
   g.clear();
   roundRect(g, 4, 6, 100, 240, 18, 0x2fb573);
   shine(g, 4, 6, 100, 60, 14);
-  // janelas
   g.fillStyle(0xbfeaff, 1);
   for (let i = 0; i < 4; i++) g.fillRoundedRect(22, 34 + i * 52, 64, 30, 8);
   g.fillStyle(0x1c2440, 0.5);
