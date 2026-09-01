@@ -10,6 +10,7 @@ import { resolveSkin } from './skins.js';
 import { POWERUPS, effectiveValue } from './powerups.js';
 import { getPrefs, setSound, setMusic } from '../../core/audio.js';
 import * as ui from '../../ui/gameui.js';
+import { icon } from '../../ui/icons.js';
 
 // Tipos de mensagem no canal do jogo (payloads dentro de MSG.GAME).
 const M = { STATE: 1, SNAP: 2, DEAD: 3, ATTACK: 4, DEBUFF: 5 };
@@ -27,7 +28,7 @@ const unpack = (a) => ({
 const HUD_HTML = `
   <div class="hud-me">
     <div id="r-dist" class="hud-big">0 m</div>
-    <div class="hud-sub"><span id="r-coins">🪙 0</span><span id="r-lives">❤️❤️❤️</span></div>
+    <div class="hud-sub"><span id="r-coins">${icon('twoCoins')} 0</span><span id="r-lives">❤️❤️❤️</span></div>
     <div class="speedo">
       <div class="speedo-bar"><div id="r-fill"></div></div>
       <div id="r-kmh" class="speedo-num">0 <small>km/h</small></div>
@@ -76,7 +77,7 @@ export function createGame(ctx) {
 
   function paintHUD(s) {
     el.dist.textContent = ui.nf(s.dist) + ' m';
-    el.coins.textContent = '🪙 ' + s.coins;
+    el.coins.innerHTML = icon('twoCoins') + ' ' + s.coins;
     el.lives.textContent = hearts(s.lives);
     el.fill.style.width = Math.max(0, Math.min(1, s.speedFrac)) * 100 + '%';
     el.kmh.innerHTML = `${s.kmh} <small>km/h</small>`;

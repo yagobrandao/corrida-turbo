@@ -88,6 +88,8 @@ html, body {
 .mini-btn .gi { width: 14px; height: 14px; }
 .btn-mega .gi { width: .95em; height: .95em; color: #b8531a; }
 .stage-stat .gi { width: .95em; height: .95em; color: var(--green); }
+.hud-sub .gi, .rr-host .gi { color: var(--gold); }
+.rr-host .gi { color: var(--muted); width: .9em; height: .9em; }
 .q-ok .gi { color: var(--green); }
 .lh-tag .gi { color: var(--muted); }
 .dim { color: var(--muted); font-size: 12px; font-weight: 500; }

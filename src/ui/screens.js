@@ -74,7 +74,7 @@ function roomRowsHtml(rooms, loadingRooms) {
         <div class="rr-thumb">${gameArt(g)}</div>
         <div class="rr-body">
           <div class="rr-game">${esc(g.name)}</div>
-          <div class="rr-host">👤 ${esc(r.host)}</div>
+          <div class="rr-host">${icon('character')} ${esc(r.host)}</div>
         </div>
         <div class="rr-side">
           <div class="rr-count ${full ? 'cheia' : ''}">${full ? '⛔' : '🟢'} ${r.players}/${r.max}</div>
@@ -614,12 +614,12 @@ export function showRewards({ unlocked, claimedNow }, onClose) {
     ...unlocked.map(a => `
       <div class="rw-row">
         <div class="rw-emoji">${a.emoji}</div>
-        <div><b>${esc(a.name)}</b><div class="q-sub">Conquista desbloqueada · 🪙 ${a.reward}</div></div>
+        <div><b>${esc(a.name)}</b><div class="q-sub">Conquista desbloqueada · ${icon('twoCoins', 'gi-gold')} ${a.reward}</div></div>
       </div>`),
     ...claimedNow.map(m => `
       <div class="rw-row">
         <div class="rw-emoji">${m.emoji}</div>
-        <div><b>${esc(m.text)}</b><div class="q-sub">Missão concluída · 🪙 ${m.reward}</div></div>
+        <div><b>${esc(m.text)}</b><div class="q-sub">Missão concluída · ${icon('twoCoins', 'gi-gold')} ${m.reward}</div></div>
       </div>`),
   ].join('');
   const m = modal(`<h3>🎉 RECOMPENSAS</h3>${items}<button class="btn green" data-a="ok">MARAVILHA</button>`);
@@ -636,7 +636,7 @@ export function showSkins(progress, preview, actions) {
       <div class="skin-card ${sel ? 'on' : ''} ${unlocked ? '' : 'locked'}" data-skin="${s.id}">
         ${charSVG(s.id, { size: 42, blink: false })}
         <div class="sn">${unlocked ? esc(s.name) : '🔒'}</div>
-        <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : '🪙 ' + nf(s.cost)}</div>
+        <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : icon('twoCoins', 'gi-gold') + ' ' + nf(s.cost)}</div>
       </div>`;
   }).join('');
 

@@ -86,7 +86,7 @@ function showQuestsScreen() {
     tab: (t) => { questTab = t; showQuestsScreen(); },
     claim: (id) => {
       const reward = quests.claim(id);
-      if (reward) { sfx.coin(); ui.toast(`+🪙 ${reward} resgatadas!`); }
+      if (reward) { sfx.coin(); ui.toast(`+${reward} moedas resgatadas!`); }
       showQuestsScreen();
     },
     back: () => showHub(),
@@ -618,7 +618,7 @@ function showUpgrades() {
       const level = store.upgradeLevel(id);
       if (level >= MAX_LEVEL) return;
       const cost = upgradeCost(level);
-      if (!store.spendCoins(cost)) { ui.toast('Moedas insuficientes 🪙'); return; }
+      if (!store.spendCoins(cost)) { ui.toast('Moedas insuficientes'); return; }
       store.setUpgradeLevel(id, level + 1);
       sfx.powerup();
       showUpgrades();
