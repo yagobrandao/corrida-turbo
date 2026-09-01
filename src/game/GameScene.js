@@ -4,7 +4,8 @@
 import Phaser from 'phaser';
 import {
   GAME_W, GAME_H, LANE_W, PLAYER_Y_FRAC, PX_PER_M,
-  SPEED_START, SPEED_MAX, JUMP_DURATION, SLIDE_DURATION, LANE_TWEEN,
+  SPEED_START, SPEED_MAX, SPEED_RAMP_UNTIL, SPEED_ACCEL_EARLY, SPEED_ACCEL_LATE,
+  JUMP_DURATION, SLIDE_DURATION, LANE_TWEEN,
   INVULN_TIME, LIVES, STATE_HZ, COIN_VALUE, SCORE_PER_M,
 } from '../core/config.js';
 import { Track } from '../world/track.js';
@@ -235,8 +236,9 @@ export default class GameScene extends Phaser.Scene {
 
     if (this.running && !this.dead) {
       this.elapsed += dt;
-      // aceleração em duas fases: rampa inicial mais agressiva
-      const accel = this.speed < 20 ? 0.15 : 0.075;
+      // aceleração em duas fases: rampa inicial agressiva para a corrida
+      // engatar rápido, depois um crescimento lento e contínuo
+      const accel = this.speed < SPEED_RAMP_UNTIL ? SPEED_ACCEL_EARLY : SPEED_ACCEL_LATE;
       this.speed = Math.min(SPEED_MAX, this.speed + accel * dt);
       this.dist += this.speed * dt;
 

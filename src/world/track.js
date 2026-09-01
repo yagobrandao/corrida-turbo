@@ -22,7 +22,7 @@ export class Track {
     this.rng = new Rng(seed);
     this.obstacles = [];   // { id, d, lane, type, len }
     this.coins = [];       // { id, d, lane }
-    this._cursor = 70;     // primeira ameaça só depois de 70m
+    this._cursor = 45;     // primeira ameaça já nos primeiros segundos
     this._prevFree = 1;    // faixa livre do último padrão
     this._nextId = 1;
   }
@@ -66,10 +66,12 @@ export class Track {
   _gap() {
     const t = this._tier();
     const r = this.rng;
-    if (t === 0) return r.range(26, 38);
-    if (t === 1) return r.range(21, 32);
-    if (t === 2) return r.range(17, 27);
-    return r.range(14, 23);
+    // valores em metros: com a velocidade maior, o espaçamento cresce junto
+    // para o tempo de reação continuar justo
+    if (t === 0) return r.range(32, 44);
+    if (t === 1) return r.range(26, 37);
+    if (t === 2) return r.range(21, 31);
+    return r.range(17, 27);
   }
 
   // Sorteia a faixa livre respeitando a distância até o padrão anterior.

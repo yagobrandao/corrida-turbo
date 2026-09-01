@@ -8,9 +8,11 @@ export const PLAYER_Y_FRAC = 0.78;    // posição vertical do jogador na tela
 export const PX_PER_M = 6.5;          // escala mundo->tela
 
 // Velocidade (m/s)
-export const SPEED_START = 11;
-export const SPEED_MAX = 30;
-export const SPEED_ACCEL = 0.10;      // m/s por segundo
+export const SPEED_START = 16;
+export const SPEED_MAX = 32;
+export const SPEED_RAMP_UNTIL = 23;   // até aqui a aceleração é agressiva
+export const SPEED_ACCEL_EARLY = 0.38;
+export const SPEED_ACCEL_LATE = 0.09;
 
 // Ações
 export const JUMP_DURATION = 0.62;    // s
