@@ -590,29 +590,47 @@ function showUpgrades() {
 // ------------------------------------------------------------------
 // Boot
 // ------------------------------------------------------------------
-// iOS instalado na tela inicial: alguns iPhones reportam
-// env(safe-area-inset-top) = 0 no modo standalone, e o HUD cola no relógio /
-// Dynamic Island. Mede o recuo de verdade e, se o env falhar, aplica na mão
-// o valor conhecido do aparelho.
+// iOS instalado na tela inicial: env(safe-area-inset-top) é imprevisível no
+// modo standalone (às vezes 0, às vezes só popula depois do primeiro layout)
+// e o HUD cola no relógio / Dynamic Island. Estratégia à prova de bala:
+//   1. mede o env de verdade com um elemento-sonda;
+//   2. num iOS instalado, aplica SEMPRE o piso conhecido do aparelho,
+//      mesmo que o env diga menos;
+//   3. remede depois que a tela assenta e a cada rotação.
 function fixSafeArea() {
-  const probe = document.createElement('div');
-  probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;padding-top:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none;';
-  document.body.appendChild(probe);
-  const measured = probe.offsetHeight;   // sem conteúdo, a altura É o padding
-  probe.remove();
-  if (measured > 0) return;              // env() funciona, nada a fazer
-
   const iOS = /iP(hone|ad|od)/.test(navigator.userAgent)
     || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const standalone = navigator.standalone === true
     || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
-  if (!iOS || !standalone) return;
 
-  // aparelhos com notch/ilha têm tela "alta" (>=780 pontos); os antigos só
-  // precisam dos 20px da barra de status
-  const tall = Math.max(screen.height, screen.width) >= 780;
-  document.documentElement.style.setProperty('--safe-top', tall ? '59px' : '20px');
-  document.documentElement.style.setProperty('--safe-bottom', tall ? '30px' : '0px');
+  const measure = (prop) => {
+    const probe = document.createElement('div');
+    probe.style.cssText = `position:fixed;top:0;left:0;width:1px;${prop}:env(safe-area-inset-${prop === 'padding-top' ? 'top' : 'bottom'},0px);visibility:hidden;pointer-events:none;`;
+    document.body.appendChild(probe);
+    const v = probe.offsetHeight;   // sem conteúdo, a altura É o padding
+    probe.remove();
+    return v;
+  };
+
+  const apply = () => {
+    let top = measure('padding-top');
+    let bottom = measure('padding-bottom');
+    if (iOS && standalone) {
+      // telas "altas" (>=780 pontos) têm notch/ilha: piso de 59px em cima e
+      // 24px embaixo (barra de gesto); as antigas só a barra de status
+      const tall = Math.max(screen.width, screen.height) >= 780;
+      top = Math.max(top, tall ? 59 : 20);
+      bottom = Math.max(bottom, tall ? 24 : 0);
+    }
+    if (top > 0) document.documentElement.style.setProperty('--safe-top', top + 'px');
+    if (bottom > 0) document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
+  };
+
+  apply();
+  setTimeout(apply, 400);            // env pode popular tarde no iOS
+  setTimeout(apply, 1500);
+  window.addEventListener('resize', apply);
+  window.addEventListener('orientationchange', () => setTimeout(apply, 250));
 }
 
 function boot() {
