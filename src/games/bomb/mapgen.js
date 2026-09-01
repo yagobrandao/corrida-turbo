@@ -48,14 +48,13 @@ export function generateArena(seed, playerCount, round) {
     }
   }
 
-  // zonas de spawn protegidas (canto + vizinhas)
+  // zonas de spawn protegidas: canto + DUAS células por braço, para a
+  // primeira bomba (alcance 1) sempre ter rota de fuga em linha reta
   const safe = new Set();
   for (const s of spawnPoints(grid).slice(0, Math.max(2, playerCount))) {
-    safe.add(`${s.c},${s.r}`);
-    safe.add(`${s.c + 1},${s.r}`);
-    safe.add(`${s.c - 1},${s.r}`);
-    safe.add(`${s.c},${s.r + 1}`);
-    safe.add(`${s.c},${s.r - 1}`);
+    for (const [dc, dr] of [[0, 0], [1, 0], [2, 0], [-1, 0], [-2, 0], [0, 1], [0, 2], [0, -1], [0, -2]]) {
+      safe.add(`${s.c + dc},${s.r + dr}`);
+    }
   }
 
   // caixotes

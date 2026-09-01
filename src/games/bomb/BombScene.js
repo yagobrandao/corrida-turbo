@@ -285,10 +285,13 @@ export default class BombScene extends Phaser.Scene {
     if (this.bombs.has(id)) return;
     const spr = this.add.image(this.cx(c), this.cy(r), this._k('bomb')).setDepth(3);
     this.tweens.add({ targets: spr, scale: 1.12, duration: 300, yoyo: true, repeat: -1, ease: 'sine.inOut' });
-    // a bomba só vira parede para quem sair de cima dela (escapa da própria)
+    // a bomba só vira parede para quem sair de cima dela (escapa da própria).
+    // O teste é pelo CORPO inteiro, não pelo centro: senão o jogador trava
+    // montado na divisa da célula, com a borda ainda dentro da bomba.
+    const rad = this.grid.tile * 0.34;
     const solidFor = new Set();
     for (const a of this.actors.values()) {
-      if (this.colAt(a.x) === c && this.rowAt(a.y) === r) continue;
+      if (this._circleOnTile(a.x, a.y, rad, c, r)) continue;
       solidFor.add(a.slot);
     }
     this.bombs.set(id, { id, c, r, owner, fuse: fuse ?? BOMB_FUSE, spr, solidFor });
@@ -434,6 +437,15 @@ export default class BombScene extends Phaser.Scene {
     if (this.hooks.onClock) this.hooks.onClock(this.clock);
   }
 
+  // o círculo do personagem encosta na célula (c, r)?
+  _circleOnTile(x, y, rad, c, r) {
+    const t = this.grid.tile;
+    const x0 = this.ox + c * t, y0 = this.oy + r * t;
+    const nx = Math.max(x0, Math.min(x, x0 + t));
+    const ny = Math.max(y0, Math.min(y, y0 + t));
+    return (x - nx) * (x - nx) + (y - ny) * (y - ny) < rad * rad;
+  }
+
   _solid(c, r, slot) {
     if (r < 0 || c < 0 || r >= this.grid.rows || c >= this.grid.cols) return true;
     const cell = this.cells[r][c];
@@ -450,10 +462,11 @@ export default class BombScene extends Phaser.Scene {
     const t = this.grid.tile;
     const rad = t * 0.34;
 
-    // a bomba embaixo do jogador vira sólida quando ele sai de cima
+    // a bomba embaixo do jogador vira sólida quando o CORPO INTEIRO sai de
+    // cima dela — só o centro cruzar a divisa não basta
     for (const b of this.bombs.values()) {
       if (!b.solidFor.has(this.mySlot)) {
-        if (this.colAt(me.x) !== b.c || this.rowAt(me.y) !== b.r) b.solidFor.add(this.mySlot);
+        if (!this._circleOnTile(me.x, me.y, rad, b.c, b.r)) b.solidFor.add(this.mySlot);
       }
     }
 

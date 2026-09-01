@@ -13,7 +13,9 @@ export const SPEED_STEP = 22;        // por power-up de velocidade (máx 3)
 export const BOMB_FUSE = 2.4;        // s até explodir
 export const CHAIN_FUSE = 0.14;      // pavio de bomba atingida por explosão
 export const BLAST_TIME = 0.45;      // s que o fogo fica ativo
-export const BASE_RANGE = 2;         // alcance inicial da explosão
+// Alcance 1 de propósito: com o corredor de spawn de 2 células, plantar e
+// fugir em linha reta é sempre possível — e o 🔥 vira um power-up desejado.
+export const BASE_RANGE = 1;
 export const BASE_BOMBS = 1;         // bombas simultâneas iniciais
 
 export const ROUND_TIME = 90;        // s; depois disso a arena começa a fechar

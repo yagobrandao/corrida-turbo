@@ -19,6 +19,19 @@
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* Cinto extra para iOS instalado na tela de início: se o env() falhar no
+   modo standalone, o piso entra por CSS mesmo, antes de qualquer JS.
+   O @supports de -webkit-touch-callout só é verdadeiro no iOS, então o
+   Android instalado não ganha padding indevido. */
+@supports (-webkit-touch-callout: none) {
+  @media (display-mode: standalone) {
+    :root {
+      --safe-top: max(env(safe-area-inset-top, 0px), 54px);
+      --safe-bottom: max(env(safe-area-inset-bottom, 0px), 18px);
+    }
+  }
+}
+
 html, body {
   height: 100%;
   overflow: hidden;

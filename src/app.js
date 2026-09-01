@@ -624,6 +624,9 @@ function fixSafeArea() {
     }
     if (top > 0) document.documentElement.style.setProperty('--safe-top', top + 'px');
     if (bottom > 0) document.documentElement.style.setProperty('--safe-bottom', bottom + 'px');
+    // o iOS standalone às vezes assenta o viewport DEPOIS do primeiro layout
+    // e o Phaser fica com o canvas descentralizado — força o recálculo junto
+    if (phaser && phaser.scale) phaser.scale.refresh();
   };
 
   apply();
