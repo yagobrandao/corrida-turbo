@@ -590,7 +590,33 @@ function showUpgrades() {
 // ------------------------------------------------------------------
 // Boot
 // ------------------------------------------------------------------
+// iOS instalado na tela inicial: alguns iPhones reportam
+// env(safe-area-inset-top) = 0 no modo standalone, e o HUD cola no relógio /
+// Dynamic Island. Mede o recuo de verdade e, se o env falhar, aplica na mão
+// o valor conhecido do aparelho.
+function fixSafeArea() {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;padding-top:env(safe-area-inset-top,0px);visibility:hidden;pointer-events:none;';
+  document.body.appendChild(probe);
+  const measured = probe.offsetHeight;   // sem conteúdo, a altura É o padding
+  probe.remove();
+  if (measured > 0) return;              // env() funciona, nada a fazer
+
+  const iOS = /iP(hone|ad|od)/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const standalone = navigator.standalone === true
+    || (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+  if (!iOS || !standalone) return;
+
+  // aparelhos com notch/ilha têm tela "alta" (>=780 pontos); os antigos só
+  // precisam dos 20px da barra de status
+  const tall = Math.max(screen.height, screen.width) >= 780;
+  document.documentElement.style.setProperty('--safe-top', tall ? '59px' : '20px');
+  document.documentElement.style.setProperty('--safe-bottom', tall ? '30px' : '0px');
+}
+
 function boot() {
+  fixSafeArea();
   const unlock = () => { unlockAudio(); if (getPrefs().music && phase === 'match') startMusic(); };
   document.addEventListener('pointerdown', unlock, { once: true });
   document.addEventListener('gesturestart', (e) => e.preventDefault());
