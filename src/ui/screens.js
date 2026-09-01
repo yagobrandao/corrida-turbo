@@ -8,6 +8,8 @@ import { GAMES, CATEGORIES, getGame, gamesByCategory } from '../games/index.js';
 import { MAX_PLAYERS, slotHex, slotName } from '../core/config.js';
 import { SKINS, isUnlocked } from '../games/runner/skins.js';
 import { openScanner } from './qrscan.js';
+import { charSVG, gameArt, levelInfo } from './art.js';
+import { SLOT_COLORS } from '../core/config.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
@@ -51,85 +53,172 @@ function bindAll(node, sel, fn) {
 
 // ================================================================ CENTRAL
 // state: { progress, rooms, loadingRooms, filter }
-export function showHub(state, actions) {
-  const { progress, rooms, loadingRooms, filter } = state;
+// decoração de céu compartilhada pelas telas do hub
+function sceneDeco() {
+  return `
+    <div class="scene-stars"></div>
+    <div class="scene-clouds">
+      <div class="cloud" style="top:9%;animation-duration:52s;animation-delay:-12s"></div>
+      <div class="cloud" style="top:20%;animation-duration:74s;animation-delay:-40s;transform:scale(.7)"></div>
+      <div class="cloud" style="top:5%;animation-duration:63s;animation-delay:-30s;transform:scale(.55)"></div>
+    </div>`;
+}
 
-  const cards = gamesByCategory(filter).map(g => `
-    <div class="game-card" data-game="${g.id}" style="--accent:${g.accent}">
-      <div class="gc-emoji">${g.emoji}</div>
-      <div class="gc-body">
-        <div class="gc-name">${esc(g.name)}</div>
-        <div class="gc-tag">${esc(g.tagline)}</div>
-        <div class="gc-meta">👥 ${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`} jogadores</div>
-      </div>
-      <div class="gc-go">▶</div>
-    </div>`).join('');
-
-  const roomRows = rooms.length ? rooms.map(r => {
+function roomRowsHtml(rooms, loadingRooms) {
+  return rooms.length ? rooms.map(r => {
     const g = getGame(r.game);
     const full = r.players >= r.max;
     return `
-      <div class="room-row ${full ? 'full' : ''}" data-code="${esc(r.code)}">
+      <div class="room-row ${full ? 'full' : ''}" data-code="${esc(r.code)}" style="border-left-color:${g.accent}">
         <div class="rr-emoji">${g.emoji}</div>
         <div class="rr-body">
           <div class="rr-game">${esc(g.name)}</div>
           <div class="rr-host">👤 ${esc(r.host)}</div>
         </div>
         <div class="rr-side">
-          <div class="rr-count ${full ? 'cheia' : ''}">👥 ${r.players}/${r.max}</div>
+          <div class="rr-count ${full ? 'cheia' : ''}">${full ? '⛔' : '🟢'} ${r.players}/${r.max}</div>
           <button class="rr-btn" ${full ? 'disabled' : ''}>${full ? 'CHEIA' : 'ENTRAR'}</button>
         </div>
       </div>`;
   }).join('') : `
       <div class="empty-rooms">
-        ${loadingRooms ? '<span class="waiting-dots">Procurando salas</span>'
-                       : 'Nenhuma sala pública aberta agora.<br><small>Crie a sua ou entre por código.</small>'}
+        ${loadingRooms ? '<span class="waiting-dots">Procurando partidas</span>'
+                       : 'Nenhuma partida aberta agora.<br><small>Toque em JOGAR e crie a sua!</small>'}
       </div>`;
+}
+
+const playersLabel = (g) => `👥 ${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`}`;
+
+function gameCardHtml(g) {
+  return `
+    <div class="gcard" data-game="${g.id}">
+      ${gameArt(g)}
+      <div class="gcard-body">
+        <div class="gcard-name">${esc(g.name)}</div>
+        <div class="gcard-meta">${playersLabel(g)} · ${esc(g.tagline)}</div>
+      </div>
+    </div>`;
+}
+
+function bottomNav(active, pending) {
+  return `
+    <div class="bottom-nav">
+      <button class="nav-item ${active === 'hub' ? 'on' : ''}" data-nav="hub"><span class="ni">🏠</span>HUB</button>
+      <button class="nav-item ${active === 'games' ? 'on' : ''}" data-nav="games"><span class="ni">🎮</span>JOGOS</button>
+      <button class="nav-item" data-nav="char"><span class="ni">👤</span>VOCÊ</button>
+      <button class="nav-item" data-nav="quests"><span class="ni">🏆</span>DESAFIOS${pending ? `<span class="badge">${pending}</span>` : ''}</button>
+    </div>`;
+}
+
+// aba local do hub (sobrevive aos re-render de refreshRooms)
+let hubView = 'home';
+
+export function showHub(state, actions) {
+  const { progress, rooms, loadingRooms } = state;
+  const lv = levelInfo(progress.totalCoins);
+  const skinId = progress.skin || 'azul';
+
+  const homeView = `
+    <div class="hero-stage">
+      <div class="hero-title">PARTY HUB</div>
+      <div class="hero-sub">DUELOS ENTRE AMIGOS</div>
+      <div class="hero-char" data-a="char">${charSVG(skinId, { size: 118 })}</div>
+      <div class="hero-podium"></div>
+    </div>
+
+    <button class="btn-mega" data-a="play">🔥 JOGAR</button>
+
+    <div class="section-title"><span>JOGOS</span><button class="mini-btn" data-nav="games">ver todos</button></div>
+    <div class="game-strip">${GAMES.map(gameCardHtml).join('')}</div>
+
+    <div class="section-title"><span>PARTIDAS ABERTAS</span><button class="mini-btn" data-a="refresh">↻</button></div>
+    <div class="room-list">${roomRowsHtml(rooms, loadingRooms)}</div>`;
+
+  const gamesView = `
+    <div class="hero-title" style="font-size:24px;margin-top:4px">ESCOLHA UM JOGO</div>
+    <div class="game-grid">${GAMES.map(gameCardHtml).join('')}</div>
+    <div class="section-title"><span>PARTIDAS ABERTAS</span><button class="mini-btn" data-a="refresh">↻</button></div>
+    <div class="room-list">${roomRowsHtml(rooms, loadingRooms)}</div>
+    <button class="btn ghost" data-a="upgrades" style="margin-top:4px">⚡ OFICINA DE MELHORIAS</button>`;
 
   const node = el(`
     <div class="screen hub">
-      <div class="hub-top">
-        <div class="logo-sm">🎮 PARTY HUB</div>
-        <div class="name-tag" data-a="name">
-          <b>${esc(progress.name || 'Jogador')}</b><span class="nt-edit">✏️</span>
-        </div>
+      ${sceneDeco()}
+      <div class="hub-hud">
+        <button class="player-pill" data-a="name">
+          <span class="pp-avatar">${charSVG(skinId, { size: 30, blink: false })}</span>
+          <span class="pp-body">
+            <span class="pp-name">${esc(progress.name || 'Jogador')} ✏️</span>
+            <span class="pp-lv"><span class="pp-lv-num">Nv ${lv.level}</span><span class="xp-bar"><span class="xp-fill" style="width:${lv.pct}%"></span></span></span>
+          </span>
+        </button>
+        <div class="coin-pill">🪙 ${nf(progress.coins)}</div>
+        <button class="icon-btn" data-a="settings">⚙️</button>
       </div>
 
-      <div class="section-title">JOGOS</div>
-      <div class="filters">
-        ${CATEGORIES.map(c => `<button class="filter ${c.id === filter ? 'on' : ''}" data-cat="${c.id}">${c.name}</button>`).join('')}
-      </div>
-      <div class="game-list">${cards}</div>
-
-      <div class="section-title row-between">
-        <span>SALAS PÚBLICAS</span>
-        <button class="mini-btn" data-a="refresh">↻</button>
-      </div>
-      <div class="room-list">${roomRows}</div>
-
-      <button class="btn green" data-a="create">CRIAR SALA</button>
-      <button class="btn orange" data-a="join">ENTRAR COM CÓDIGO</button>
-      <div class="hub-foot">
-        <button class="mini-link" data-a="quests">🎯 Missões${state.pendingQuests ? `<span class="badge">${state.pendingQuests}</span>` : ''}</button>
-        <button class="mini-link" data-a="skins">🎭 Personagens</button>
-        <button class="mini-link" data-a="upgrades">🧪 Melhorias</button>
-        <button class="mini-link" data-a="settings">⚙️ Ajustes</button>
-      </div>
+      ${hubView === 'games' ? gamesView : homeView}
+      ${bottomNav(hubView === 'games' ? 'games' : 'hub', state.pendingQuests)}
     </div>
   `);
 
-  bindAll(node, '.filter', (b) => actions.filter(b.dataset.cat));
-  bindAll(node, '.game-card', (c) => actions.pickGame(c.dataset.game));
+  bindAll(node, '.gcard', (c) => actions.pickGame(c.dataset.game));
   bindAll(node, '.room-row:not(.full)', (r) => actions.joinCode(r.dataset.code));
-  bind(node, '[data-a=refresh]', actions.refresh);
-  bind(node, '[data-a=create]', () => actions.create(null));
-  bind(node, '[data-a=join]', actions.join);
+  bindAll(node, '[data-a=refresh]', actions.refresh);
+  bindAll(node, '[data-nav]', (b) => {
+    const nav = b.dataset.nav;
+    if (nav === 'hub') { hubView = 'home'; showHub(state, actions); }
+    else if (nav === 'games') { hubView = 'games'; showHub(state, actions); }
+    else if (nav === 'char') actions.skins();
+    else if (nav === 'quests') actions.quests();
+  });
+  bind(node, '[data-a=play]', () => showPlaySheet(state, actions));
+  bind(node, '[data-a=char]', actions.skins);
   bind(node, '[data-a=name]', () => showNameEditor(progress.name, actions.setName));
-  bind(node, '[data-a=quests]', actions.quests);
-  bind(node, '[data-a=skins]', actions.skins);
   bind(node, '[data-a=upgrades]', actions.upgrades);
   bind(node, '[data-a=settings]', () => showSettings(actions.resetProgress));
   show(node);
+}
+
+// folha de opções do botão JOGAR
+function showPlaySheet(state, actions) {
+  const back = el(`
+    <div class="sheet-back">
+      <div class="sheet">
+        <div class="sheet-grip"></div>
+        <h3>🎮 BORA JOGAR</h3>
+        <button class="sheet-opt" data-a="create">
+          <span class="so-ico">✨</span>
+          <span><span class="so-t">Criar partida</span><br><span class="so-s">Você escolhe o jogo e chama os amigos</span></span>
+        </button>
+        <button class="sheet-opt" data-a="rooms">
+          <span class="so-ico">🌎</span>
+          <span><span class="so-t">Partidas abertas</span><br><span class="so-s">${state.rooms.length ? state.rooms.length + ' sala(s) esperando gente' : 'Ver a lista de salas públicas'}</span></span>
+        </button>
+        <button class="sheet-opt" data-a="code">
+          <span class="so-ico">🔑</span>
+          <span><span class="so-t">Entrar com código</span><br><span class="so-s">Seu amigo te passou um código de 5 letras</span></span>
+        </button>
+        <button class="sheet-opt" data-a="scan">
+          <span class="so-ico">📷</span>
+          <span><span class="so-t">Escanear QR Code</span><br><span class="so-s">Aponte a câmera para o convite</span></span>
+        </button>
+      </div>
+    </div>`);
+  back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
+  bind(back, '[data-a=create]', () => { back.remove(); actions.create(null); });
+  bind(back, '[data-a=rooms]', () => {
+    back.remove();
+    const list = document.querySelector('.room-list');
+    if (list) list.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    actions.refresh();
+  });
+  bind(back, '[data-a=code]', () => { back.remove(); actions.join(); });
+  bind(back, '[data-a=scan]', async () => {
+    back.remove();
+    const code = await openScanner();
+    if (code) actions.joinCode(code);
+  });
+  document.body.appendChild(back);
 }
 
 // ================================================================ MELHORIAS
@@ -137,13 +226,16 @@ export function showHub(state, actions) {
 export function showUpgrades(state, actions) {
   const { progress, powerups } = state;
   const fmt = (pu, v) => pu.kind === 'timed' ? `${v.toFixed(1)}s` : `${Math.round(v)}${pu.id === 'vida' ? ' vida' : ''}`;
+  const pips = (level) => `
+    <div class="up-pips">${[1, 2, 3, 4, 5].map(i => `<span class="up-pip ${i <= level ? 'on' : ''}"></span>`).join('')}</div>`;
   const cards = powerups.map(pu => `
     <div class="up-card">
       <div class="up-emoji">${pu.emoji}</div>
       <div class="up-body">
-        <div class="up-name">${esc(pu.name)} <span class="up-lv">nv ${pu.level}</span></div>
+        <div class="up-name">${esc(pu.name)} <span class="up-lv">NV ${pu.level}</span></div>
         <div class="up-desc">${esc(pu.desc)}</div>
         <div class="up-val">${fmt(pu, pu.value)}${pu.nextValue !== null && pu.nextValue !== pu.value ? ` → <b>${fmt(pu, pu.nextValue)}</b>` : ''}</div>
+        ${pips(pu.level)}
       </div>
       ${pu.cost !== null
         ? `<button class="up-buy ${progress.coins >= pu.cost ? '' : 'poor'}" data-pu="${pu.id}">🪙 ${nf(pu.cost)}</button>`
@@ -152,9 +244,10 @@ export function showUpgrades(state, actions) {
 
   const node = el(`
     <div class="screen">
-      <h2>MELHORIAS</h2>
+      ${sceneDeco()}
+      <h2>⚡ OFICINA</h2>
       <div class="coin-bar">🪙 ${nf(progress.coins)} <span class="dim">para gastar</span></div>
-      <p class="hint">Os itens aparecem na pista durante a corrida. Melhore cada um para ele durar mais (ou render mais) quando você pegar.</p>
+      <p class="hint">Os itens aparecem na pista durante a corrida. Melhore cada um para render mais quando você pegar.</p>
       <div class="up-list">${cards}</div>
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
@@ -169,13 +262,16 @@ export function showGameDetail(gameId, actions) {
   const g = getGame(gameId);
   const node = el(`
     <div class="screen">
-      <div class="detail-hero" style="--accent:${g.accent}">
-        <div class="dh-emoji">${g.emoji}</div>
-        <h2>${esc(g.name)}</h2>
-        <p class="hint">${esc(g.description)}</p>
-        <div class="gc-meta">👥 ${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`} jogadores</div>
+      ${sceneDeco()}
+      <div class="detail-hero">
+        ${gameArt(g)}
+        <div class="dh-body">
+          <h2>${esc(g.name)}</h2>
+          <p class="hint">${esc(g.description)}</p>
+          <div class="gc-meta">${playersLabel(g)} jogadores</div>
+        </div>
       </div>
-      <button class="btn green" data-a="create">CRIAR SALA</button>
+      <button class="btn green" data-a="create">✨ CRIAR PARTIDA</button>
       ${g.minPlayers <= 1 ? '<button class="btn ghost" data-a="solo">🏃 TREINAR SOZINHO</button>' : ''}
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
@@ -209,14 +305,16 @@ export function showCreate(form, actions) {
 
   const node = el(`
     <div class="screen">
-      <h2>CRIAR SALA</h2>
+      ${sceneDeco()}
+      <h2>🎮 NOVA PARTIDA</h2>
 
       <div class="form-block">
-        <div class="form-label">Jogo</div>
+        <div class="form-label">ESCOLHA SEU JOGO</div>
         <div class="game-picker">
           ${GAMES.map(x => `
-            <button class="gp ${x.id === form.gameId ? 'on' : ''}" data-game="${x.id}" style="--accent:${x.accent}">
-              <span class="gp-e">${x.emoji}</span><span class="gp-n">${esc(x.name)}</span>
+            <button class="gp ${x.id === form.gameId ? 'on' : ''}" data-game="${x.id}">
+              ${gameArt(x)}
+              <span class="gp-n">${esc(x.name)}</span>
             </button>`).join('')}
         </div>
       </div>
@@ -246,7 +344,7 @@ export function showCreate(form, actions) {
 
       ${settingsBlocks}
 
-      <button class="btn green" data-a="go">CRIAR SALA</button>
+      <button class="btn-mega" data-a="go" style="font-size:19px">✨ CRIAR PARTIDA</button>
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
   `);
@@ -311,18 +409,19 @@ export function showLobby(state, actions) {
     const p = players.find(x => x.slot === i);
     if (!p) {
       slots.push(`
-        <div class="pslot empty">
-          <div class="pdot" style="background:${slotHex(i)};opacity:.3"></div>
-          <div class="pname">Vago</div>
-          <div class="pstat">aguardando</div>
+        <div class="stage-slot empty">
+          <div class="stage-ghost">?</div>
+          <div class="stage-name" style="color:var(--muted)">Vago</div>
+          <div class="stage-stat">aguardando</div>
         </div>`);
       continue;
     }
+    // o boneco já aparece na COR que o jogador terá dentro da partida
     slots.push(`
-      <div class="pslot ${p.isYou ? 'you' : ''}" style="border-color:${slotHex(i)}">
-        <div class="pdot" style="background:${slotHex(i)}"></div>
-        <div class="pname">${p.isHost ? '👑 ' : ''}${esc(p.name)}${p.isYou ? ' (você)' : ''}</div>
-        <div class="pstat ${p.ready ? 'ok' : ''}">${p.ready ? '✓ PRONTO' : 'esperando'}</div>
+      <div class="stage-slot" style="animation-delay:${i * 0.08}s">
+        <div class="stage-char" style="animation-delay:${i * 0.4}s">${charSVG(p.skin || 'azul', { size: 62, tint: SLOT_COLORS[i % SLOT_COLORS.length] })}</div>
+        <div class="stage-name" style="color:${slotHex(i)}">${p.isHost ? '👑 ' : ''}${esc(p.name)}${p.isYou ? ' ⭐' : ''}</div>
+        <div class="stage-stat ${p.ready ? 'ok' : ''}">${p.ready ? '✓ PRONTO' : 'esperando…'}</div>
       </div>`);
   }
 
@@ -357,20 +456,20 @@ export function showLobby(state, actions) {
 
   const node = el(`
     <div class="screen">
-      <div class="lobby-head" style="--accent:${g.accent}">
+      ${sceneDeco()}
+      <div class="lobby-head">
         <span class="lh-emoji">${g.emoji}</span>
         <h2>${esc(g.name)}</h2>
-        <div class="lh-tag">${room.visibility === 'public' ? '🌎 Sala pública' : '🔒 Sala privada'}</div>
+        <div class="lh-tag">${room.visibility === 'public' ? '🌎 Sala pública' : '🔒 Sala privada'} · ${players.length}/${room.maxPlayers}</div>
       </div>
+
+      <div class="stage">${slots}</div>
 
       <div class="room-card">
         <div class="room-code">${esc(code)}</div>
         ${qr ? `<img class="qr" src="${qr}" alt="QR Code da sala" />` : ''}
         <span class="copy-link" data-a="copy">copiar link de convite</span>
       </div>
-
-      <div class="pgrid">${slots}</div>
-      <div class="pcount">${players.length}/${room.maxPlayers}</div>
 
       ${settingsView}
       ${action}
@@ -395,7 +494,6 @@ export function showLobby(state, actions) {
 // ================================================================ RESULTADO
 // res: { gameId, rows:[{slot,name,score,detail,win,you}], note, canRematch, isHost }
 export function showResult(res, actions) {
-  const g = getGame(res.gameId);
   const medals = ['🥇', '🥈', '🥉', '4️⃣'];
   const rows = res.rows.map((r, i) => `
     <div class="result-row ${r.win ? 'win' : ''}" style="border-left:4px solid ${slotHex(r.slot)}">
@@ -403,21 +501,36 @@ export function showResult(res, actions) {
       <div class="rstats">${esc(r.detail || '')}<br><b>${nf(r.score)}</b> pts</div>
     </div>`).join('');
 
+  // pódio com os bonecos dos 3 primeiros (2º | 1º | 3º), só em partida com gente
+  const top = res.rows.slice(0, 3);
+  const podium = top.length > 1 ? `
+    <div class="podium">
+      ${[top[1], top[0], top[2]].filter(Boolean).map((r) => {
+        const place = res.rows.indexOf(r) + 1;
+        return `
+          <div class="pod-col pod-${place}">
+            <div class="stage-char">${charSVG('azul', { size: place === 1 ? 62 : 48, tint: SLOT_COLORS[r.slot % SLOT_COLORS.length] })}</div>
+            <div class="pod-name" style="color:${slotHex(r.slot)}">${esc(r.name)}</div>
+            <div class="pod-block">${medals[place - 1] || place + 'º'}</div>
+          </div>`;
+      }).join('')}
+    </div>` : '';
+
   const records = (res.records || [])
     .map(t => `<div class="record-line">🏅 ${esc(t)}</div>`).join('');
 
   const node = el(`
     <div class="screen">
-      <h2>RESULTADO</h2>
+      ${sceneDeco()}
+      <div class="winner-name" style="font-size:26px">${res.trophy || '🏆'} ${esc(res.title)}</div>
+      ${podium}
       <div class="result-card">
-        <div class="trophy">${res.trophy || '🏆'}</div>
-        <div class="winner-name">${esc(res.title)}</div>
         ${rows}
         ${records}
         ${res.earned ? `<div class="coin-bar" style="justify-content:center">+🪙 ${nf(res.earned)}</div>` : ''}
         ${res.note ? `<p class="hint" style="max-width:none">${esc(res.note)}</p>` : ''}
       </div>
-      ${res.canRematch ? `<button class="btn green" data-a="again">${res.isHost ? 'JOGAR NOVAMENTE' : 'QUERO REVANCHE'}</button>` : ''}
+      ${res.canRematch ? `<button class="btn-mega" data-a="again" style="font-size:19px">${res.isHost ? '🔄 JOGAR NOVAMENTE' : '🔄 QUERO REVANCHE'}</button>` : ''}
       <button class="btn ghost" data-a="exit">${esc(res.exitLabel || 'SAIR DA SALA')}</button>
     </div>
   `);
@@ -470,16 +583,17 @@ export function showQuests(q, tab, actions) {
   const doneAch = q.achievements.filter(a => a.done).length;
 
   const node = el(`
-    <div class="screen hub">
-      <h2>MISSÕES</h2>
+    <div class="screen hub" style="padding-bottom:calc(24px + var(--safe-bottom))">
+      ${sceneDeco()}
+      <h2>🏆 DESAFIOS</h2>
       <div class="q-stats">
         <span>🏅 ${doneAch}/${q.achievements.length} conquistas</span>
         <span>📅 ${q.daysPlayed} ${q.daysPlayed === 1 ? 'dia' : 'dias'}</span>
       </div>
       <div class="filters">
-        <button class="filter ${tab === 'daily' ? 'on' : ''}" data-tab="daily">Diárias</button>
-        <button class="filter ${tab === 'general' ? 'on' : ''}" data-tab="general">Gerais</button>
-        <button class="filter ${tab === 'ach' ? 'on' : ''}" data-tab="ach">Conquistas</button>
+        <button class="filter ${tab === 'daily' ? 'on' : ''}" data-tab="daily">🔥 Diários</button>
+        <button class="filter ${tab === 'general' ? 'on' : ''}" data-tab="general">⭐ Gerais</button>
+        <button class="filter ${tab === 'ach' ? 'on' : ''}" data-tab="ach">🏅 Conquistas</button>
       </div>
       ${tab === 'daily' ? '<p class="hint">Trocam todo dia à meia-noite.</p>' : ''}
       <div class="q-list">${lists[tab]}</div>
@@ -513,12 +627,13 @@ export function showRewards({ unlocked, claimedNow }, onClose) {
 
 // ================================================================ PERSONAGENS
 export function showSkins(progress, preview, actions) {
+  const current = SKINS.find(s => s.id === progress.skin) || SKINS[0];
   const cards = SKINS.map(s => {
     const unlocked = isUnlocked(s, progress.totalCoins);
     const sel = s.id === progress.skin;
     return `
       <div class="skin-card ${sel ? 'on' : ''} ${unlocked ? '' : 'locked'}" data-skin="${s.id}">
-        <img src="${preview(s.id)}" alt="${esc(s.name)}" />
+        ${charSVG(s.id, { size: 42, blink: false })}
         <div class="sn">${unlocked ? esc(s.name) : '🔒'}</div>
         <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : '🪙 ' + nf(s.cost)}</div>
       </div>`;
@@ -526,10 +641,20 @@ export function showSkins(progress, preview, actions) {
 
   const node = el(`
     <div class="screen">
-      <h2>PERSONAGENS</h2>
-      <div class="coin-bar">🪙 ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
+      ${sceneDeco()}
+      <div class="char-hero">
+        <div class="hero-char">${charSVG(progress.skin, { size: 128 })}</div>
+        <div class="hero-podium"></div>
+        <h2>${esc(current.name).toUpperCase()}</h2>
+        <div class="coin-bar">🪙 ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
+      </div>
+      <div class="equip-row">
+        <div class="equip-slot"><span class="es-i">🎩</span><span class="es-t">CABEÇA</span><span class="es-s">em breve</span></div>
+        <div class="equip-slot"><span class="es-i">👕</span><span class="es-t">CORPO</span><span class="es-s">em breve</span></div>
+        <div class="equip-slot"><span class="es-i">✨</span><span class="es-t">EXTRA</span><span class="es-s">em breve</span></div>
+      </div>
       <div class="skin-grid">${cards}</div>
-      <p class="hint">Nas salas, a cor vem da sua posição — o personagem define o formato. Junte moedas correndo para destravar novos.</p>
+      <p class="hint">Nas salas, a cor vem da sua posição — o personagem define o formato. Junte moedas jogando para destravar novos.</p>
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
   `);
