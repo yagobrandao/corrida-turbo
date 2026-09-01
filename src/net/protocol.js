@@ -5,10 +5,10 @@
 // O host nunca reencaminha uma mensagem crua — ele consolida o estado e envia
 // um snapshot único, para o tráfego não crescer ao quadrado com 5 jogadores.
 export const MSG = {
-  HELLO:  'h',   // client -> host: { t, skin }        entrou, apresenta-se
+  HELLO:  'h',   // client -> host: { t, skin, name }  entrou, apresenta-se
   ROSTER: 'ro',  // host -> all:    { t, you, players } quem está na sala
   READY:  'r',   // client -> host: { t, v }
-  SKIN:   'sk',  // client -> host: { t, skin }
+  SKIN:   'sk',  // client -> host: { t, skin, name }  trocou skin/apelido
   START:  's',   // host -> all:    { t, seed }
   STATE:  'st',  // client -> host: { t, d, ln, jy, sl, lv, co, sc }
   SNAP:   'sn',  // host -> all:    { t, p: [[slot,d,ln,jy,sl,lv,sc,dead]] }

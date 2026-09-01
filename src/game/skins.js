@@ -34,3 +34,10 @@ export function resolveSkin(id, totalCoins) {
 export function textureKey(id) {
   return 'runner-' + id;
 }
+
+// Numa sala, a cor do personagem vem do slot — é o que garante que dois
+// jogadores nunca fiquem idênticos, mesmo escolhendo a mesma skin.
+// A skin continua definindo o formato e o adereço.
+export function slotTextureKey(id, slot) {
+  return `runner-${id}-s${slot}`;
+}

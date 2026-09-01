@@ -199,6 +199,13 @@ html, body {
   gap: 3px;
 }
 .players .player-slot .avatar { font-size: 26px; }
+/* a bolinha repete a cor que o jogador terá na pista */
+.pdot {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.25), 0 0 0 2px rgba(255,255,255,.15);
+}
 .players .player-slot .pname { font-size: 13px; }
 .players .player-slot .pstatus { font-size: 11px; }
 .player-slot.empty { opacity: .4; border-style: dashed; border-color: #39426f; }
@@ -262,6 +269,39 @@ html, body {
 .skin-card .sn { font-size: 12px; font-weight: 800; }
 .skin-card .sc { font-size: 10.5px; color: var(--muted); font-weight: 700; }
 .skin-card.locked .sc { color: var(--gold); }
+
+/* apelido no menu */
+.name-tag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: var(--card);
+  border-radius: 999px;
+  padding: 7px 16px;
+  cursor: pointer;
+  font-size: 15px;
+  box-shadow: inset 0 0 0 2px #39426f;
+}
+.name-tag:active { transform: scale(.97); }
+.name-tag .nt-label { color: var(--muted); font-size: 12px; font-weight: 700; }
+.name-tag b { font-weight: 800; }
+.name-tag .nt-edit { font-size: 13px; opacity: .8; }
+
+.name-input {
+  width: 100%;
+  padding: 13px 16px;
+  font-size: 19px;
+  font-weight: 800;
+  text-align: center;
+  color: var(--text);
+  background: var(--card2);
+  border: 2px solid #39426f;
+  border-radius: 14px;
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.name-input:focus { border-color: var(--accent); }
 
 /* painel de estatísticas */
 .stats-grid {
@@ -519,6 +559,51 @@ html, body {
 }
 @media (orientation: landscape) and (max-height: 500px) {
   #rotate-overlay { display: flex; }
+}
+
+/* ================= leitor de QR ================= */
+.scan-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: calc(20px + var(--safe-top)) 20px calc(28px + var(--safe-bottom));
+}
+.scan-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scan-frame {
+  position: relative;
+  width: min(72vw, 280px);
+  aspect-ratio: 1;
+  border: 3px solid rgba(255, 255, 255, .9);
+  border-radius: 22px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .55);
+  transition: border-color .2s;
+}
+.scan-frame.ok { border-color: var(--green); }
+.scan-hint {
+  position: relative;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+  max-width: 300px;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, .9);
+}
+.scan-close {
+  position: relative;
+  background: rgba(20, 26, 51, .85);
+  box-shadow: inset 0 0 0 2px #6b74a0;
+  color: #fff;
 }
 
 /* ================= toast ================= */

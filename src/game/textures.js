@@ -1,8 +1,18 @@
 // Todas as texturas são geradas em runtime (nada de assets externos),
 // com um traço cartoon consistente: cores chapadas + contorno escuro + brilho.
-import { SKINS, textureKey } from './skins.js';
+import { SKINS, getSkin, textureKey, slotTextureKey } from './skins.js';
+import { SLOT_COLORS } from '../core/config.js';
 
 const OUTLINE = 0x1c2440;
+
+// mistura uma cor com branco (amt > 0) ou preto (amt < 0)
+function shade(hex, amt) {
+  const r = (hex >> 16) & 0xff, g = (hex >> 8) & 0xff, b = hex & 0xff;
+  const mix = (c) => amt >= 0
+    ? Math.round(c + (255 - c) * amt)
+    : Math.round(c * (1 + amt));
+  return (mix(r) << 16) | (mix(g) << 8) | mix(b);
+}
 
 function roundRect(g, x, y, w, h, r, fill, line = OUTLINE) {
   g.fillStyle(line, 1);
@@ -92,6 +102,25 @@ function drawRunner(g, skin) {
   g.fillStyle(0xffffff, 0.25);
   g.fillCircle(22, BODY_TOP + 34, 4);
   g.fillCircle(54, BODY_TOP + 34, 4);
+}
+
+// Gera sob demanda a versão do personagem pintada com a cor do slot.
+// Devolve a chave da textura, pronta para usar.
+export function ensureRunnerTexture(scene, skinId, slot) {
+  const key = slotTextureKey(skinId, slot);
+  if (scene.textures.exists(key)) return key;
+  const color = SLOT_COLORS[slot % SLOT_COLORS.length];
+  const skin = {
+    ...getSkin(skinId),
+    body: color,
+    belly: shade(color, 0.45),
+    accent: shade(color, -0.35),
+  };
+  const g = scene.make.graphics({ add: false });
+  drawRunner(g, skin);
+  g.generateTexture(key, RUNNER_W, RUNNER_H);
+  g.destroy();
+  return key;
 }
 
 export function buildTextures(scene) {

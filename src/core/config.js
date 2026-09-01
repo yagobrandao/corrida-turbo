@@ -11,8 +11,10 @@ export const PX_PER_M = 6.5;          // escala mundo->tela
 export const SPEED_START = 21;
 export const SPEED_MAX = 42;
 export const SPEED_RAMP_UNTIL = 30;   // até aqui a aceleração é agressiva
-export const SPEED_ACCEL_EARLY = 0.50;
-export const SPEED_ACCEL_LATE = 0.12;
+// A rampa é curta de propósito: chega perto do teto em ~35s, para a partida
+// ficar tensa cedo em vez de levar dois minutos para engrenar.
+export const SPEED_ACCEL_EARLY = 1.20;
+export const SPEED_ACCEL_LATE = 0.40;
 
 // Ações
 export const JUMP_DURATION = 0.62;    // s

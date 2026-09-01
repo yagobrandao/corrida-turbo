@@ -3,6 +3,7 @@
 import { sfx, unlockAudio, getPrefs, setSound, setMusic } from '../game/audio.js';
 import { SKINS, isUnlocked } from '../game/skins.js';
 import { DIFFICULTIES, getDifficulty, SLOT_COLORS } from '../core/config.js';
+import { openScanner } from './qrscan.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
@@ -36,11 +37,22 @@ function bindBtn(node, sel, fn) {
 
 const nf = (n) => Number(n || 0).toLocaleString('pt-BR');
 
+// Apelidos chegam pela rede, escritos por outras pessoas: nunca injetar cru.
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESCAPES[c]);
+
+const slotColor = (slot) => '#' + SLOT_COLORS[slot % SLOT_COLORS.length].toString(16).padStart(6, '0');
+
 // ---------------------------------------------------------------- menu
 export function showMenu(progress, actions) {
   const node = el(`
     <div class="screen">
       <div class="logo">CORRIDA<br>TURBO<small>DUELO INFINITO</small></div>
+      <div class="name-tag" data-a="name">
+        <span class="nt-label">você é</span>
+        <b>${esc(progress.name || 'Jogador')}</b>
+        <span class="nt-edit">✏️</span>
+      </div>
       <div class="coin-bar">🪙 ${nf(progress.coins)}<span style="color:var(--muted);font-size:12px;font-weight:700">
         · recorde ${nf(progress.bestDist)} m</span></div>
       <button class="btn" data-a="play">JOGAR</button>
@@ -50,6 +62,7 @@ export function showMenu(progress, actions) {
       <button class="btn ghost" data-a="settings">CONFIGURAÇÕES</button>
     </div>
   `);
+  bindBtn(node, '[data-a=name]', () => showNameEditor(progress.name, actions.setName));
   bindBtn(node, '[data-a=play]', actions.play);
   bindBtn(node, '[data-a=solo]', actions.solo);
   bindBtn(node, '[data-a=skins]', actions.skins);
@@ -131,6 +144,7 @@ export function showJoin(prefill, actions) {
              autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
              inputmode="text" value="${prefill || ''}" />
       <button class="btn green" data-a="enter">ENTRAR</button>
+      <button class="btn orange" data-a="scan">📷 ESCANEAR QR</button>
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
   `);
@@ -145,6 +159,12 @@ export function showJoin(prefill, actions) {
   };
   bindBtn(node, '[data-a=enter]', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  bindBtn(node, '[data-a=scan]', async () => {
+    const code = await openScanner();
+    if (!code) return;
+    input.value = code;
+    actions.enter(code);
+  });
   bindBtn(node, '[data-a=back]', actions.back);
   show(node);
   if (!prefill) setTimeout(() => input.focus(), 100);
@@ -167,17 +187,17 @@ export function showLobby(state, actions) {
     if (!p) {
       slots.push(`
         <div class="player-slot empty">
-          <div class="avatar">＋</div>
+          <div class="pdot" style="background:${slotColor(i)};opacity:.35"></div>
           <div class="pname">Vago</div>
           <div class="pstatus">aguardando</div>
         </div>`);
       continue;
     }
-    const color = '#' + SLOT_COLORS[i % SLOT_COLORS.length].toString(16).padStart(6, '0');
+    const color = slotColor(i);
     slots.push(`
       <div class="player-slot connected ${p.isYou ? 'you' : ''}" style="border-color:${color}">
-        <div class="avatar">${p.ready ? '🏃' : '🧍'}</div>
-        <div class="pname">${p.name}${p.isYou ? ' (você)' : ''}</div>
+        <div class="pdot" style="background:${color}"></div>
+        <div class="pname">${esc(p.name)}${p.isYou ? ' (você)' : ''}</div>
         <div class="pstatus ${p.ready ? 'ok' : ''}">${p.isHost ? 'HOST · ' : ''}${p.ready ? 'PRONTO' : 'esperando'}</div>
       </div>`);
   }
@@ -243,8 +263,8 @@ export function showLobby(state, actions) {
 export function showResult(res, actions) {
   const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
   const rows = res.rows.map((r, i) => `
-    <div class="result-row ${r.win ? 'win' : ''}">
-      <div class="rname">${medals[i] || ''} ${r.name}${r.you ? ' (você)' : ''}</div>
+    <div class="result-row ${r.win ? 'win' : ''}" ${r.slot != null ? `style="border-left:4px solid ${slotColor(r.slot)}"` : ''}>
+      <div class="rname">${medals[i] || ''} ${esc(r.name)}${r.you ? ' (você)' : ''}</div>
       <div class="rstats">
         Distância: <b>${nf(r.dist)} m</b><br>
         Pontos: <b>${nf(r.score)}</b> · 🪙 ${nf(r.coins)}
@@ -285,6 +305,23 @@ function modal(inner) {
   back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
   document.body.appendChild(back);
   return back;
+}
+
+export function showNameEditor(current, onSave) {
+  const m = modal(`
+    <h3>SEU APELIDO</h3>
+    <p class="hint" style="margin:0 auto">É o nome que os outros jogadores veem na pista.</p>
+    <input class="name-input" maxlength="12" placeholder="Jogador"
+           autocomplete="off" autocorrect="off" spellcheck="false" value="${esc(current || '')}" />
+    <button class="btn green" data-a="save">SALVAR</button>
+    <button class="btn ghost" data-a="cancel">CANCELAR</button>
+  `);
+  const input = m.querySelector('.name-input');
+  const save = () => { onSave(input.value); m.remove(); };
+  bindBtn(m, '[data-a=save]', save);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
+  bindBtn(m, '[data-a=cancel]', () => m.remove());
+  setTimeout(() => { input.focus(); input.select(); }, 100);
 }
 
 export function showHowTo() {

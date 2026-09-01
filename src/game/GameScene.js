@@ -10,7 +10,7 @@ import {
   getDifficulty,
 } from '../core/config.js';
 import { Track } from '../world/track.js';
-import { buildTextures } from './textures.js';
+import { buildTextures, ensureRunnerTexture } from './textures.js';
 import { textureKey } from './skins.js';
 import { sfx } from './audio.js';
 
@@ -27,6 +27,7 @@ export default class GameScene extends Phaser.Scene {
     this.isNet = !!data.isNet;
     this.hooks = data.hooks || {};
     this.mySkin = data.mySkin || 'azul';
+    this.mySlot = data.mySlot || 0;
     this.rivals = data.rivals || [];   // [{ slot, name, skin }]
     // a dificuldade vem do host e vale igual para todos na sala
     this.diff = getDifficulty(data.difficulty);
@@ -51,8 +52,13 @@ export default class GameScene extends Phaser.Scene {
     for (const r of this.rivals) this._makeGhost(r);
 
     // ---------- jogador ----------
+    // na sala, a cor vem do slot (ninguém fica igual a ninguém);
+    // no treino solo vale a cor original da skin escolhida
+    const myTex = this.isNet
+      ? ensureRunnerTexture(this, this.mySkin, this.mySlot)
+      : textureKey(this.mySkin);
     this.shadow = this.add.image(this.laneX[1], this.playerY + 40, 'shadow').setDepth(8);
-    this.player = this.add.image(this.laneX[1], this.playerY, textureKey(this.mySkin)).setDepth(10);
+    this.player = this.add.image(this.laneX[1], this.playerY, myTex).setDepth(10);
     this.idleTween = this.tweens.add({
       targets: this.player, y: this.playerY - 7, duration: 320,
       yoyo: true, repeat: -1, ease: 'sine.inOut',
@@ -121,7 +127,7 @@ export default class GameScene extends Phaser.Scene {
     const color = SLOT_COLORS[r.slot % SLOT_COLORS.length];
     const ring = this.add.image(this.laneX[1], this.playerY + 40, 'ring')
       .setTint(color).setAlpha(0.7).setDepth(5);
-    const sprite = this.add.image(this.laneX[1], this.playerY, textureKey(r.skin))
+    const sprite = this.add.image(this.laneX[1], this.playerY, ensureRunnerTexture(this, r.skin, r.slot))
       .setAlpha(0.62).setDepth(6);
     const label = this.add.text(this.laneX[1], this.playerY - 66, r.name, {
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold',
@@ -136,6 +142,10 @@ export default class GameScene extends Phaser.Scene {
     this.ghosts.set(r.slot, {
       slot: r.slot, name: r.name, color,
       ring, sprite, label, arrow,
+      // deslocamento fixo por slot dentro da faixa: na largada todo mundo
+      // está no mesmo metro da faixa do meio e ficaria empilhado
+      xOff: (r.slot - 2) * 13,
+      labelOff: (r.slot % 3) * 16,
       d: 0, v: this.speedStart, lane: 1, jy: 0, sl: 0, lives: LIVES, sc: 0,
       alive: true, seen: false, dispD: 0, dispX: this.laneX[1], lastAt: 0,
     });
@@ -473,7 +483,7 @@ export default class GameScene extends Phaser.Scene {
         g.dispD = Phaser.Math.Linear(g.dispD, target, 0.12);
       }
 
-      const targetX = this.laneX[g.lane] ?? this.laneX[1];
+      const targetX = (this.laneX[g.lane] ?? this.laneX[1]) + g.xOff;
       g.dispX = Phaser.Math.Linear(g.dispX, targetX, 0.25);
 
       let y = this.playerY - (g.dispD - this.dist) * PX_PER_M;
@@ -487,7 +497,7 @@ export default class GameScene extends Phaser.Scene {
       g.sprite.setPosition(g.dispX, y - jumpOff);
       g.sprite.setScale(g.sl ? 1.15 : 1, g.sl ? 0.55 : 1);
       g.ring.setPosition(g.dispX, y + 40);
-      g.label.setPosition(g.dispX, y - jumpOff - 66);
+      g.label.setPosition(g.dispX, y - jumpOff - 66 - g.labelOff);
 
       if (g.alive) {
         const faded = above || below;

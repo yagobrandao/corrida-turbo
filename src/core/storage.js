@@ -12,6 +12,7 @@ const DEFAULTS = {
   races: 0,
   wins: 0,
   skin: 'azul',
+  name: '',          // apelido; vazio = usa "Jogador N" do slot
   diff: 'normal',    // última dificuldade escolhida, reaproveitada na próxima sala
   seenHowTo: false,
 };
@@ -44,6 +45,16 @@ export function getProgress() {
 
 export function setSkin(id) {
   read().skin = id;
+  write();
+}
+
+// Apelido: no máximo 12 caracteres visíveis, sem quebras nem espaços duplos.
+export function sanitizeName(raw) {
+  return String(raw || '').replace(/\s+/g, ' ').trim().slice(0, 12);
+}
+
+export function setName(raw) {
+  read().name = sanitizeName(raw);
   write();
 }
 

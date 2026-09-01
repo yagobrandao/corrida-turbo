@@ -51,6 +51,9 @@ function resetMatch(mode) {
 
 const mySlot = () => (net ? (net.role === 'host' ? 0 : lobby.mySlot) : 0);
 const slotName = (slot) => SLOT_NAMES[slot] || `Jogador ${slot + 1}`;
+// nome do roster quando existe; senão o rótulo genérico do slot
+const nameOf = (slot) => (lobby.players.get(slot)?.name) || slotName(slot);
+const myName = () => store.sanitizeName(store.getProgress().name) || slotName(mySlot());
 
 // ------------------------------------------------------------------
 // Phaser
@@ -135,6 +138,7 @@ async function prepareMatch({ seed, difficulty, roster }) {
     seed, isNet, difficulty,
     hooks: sceneHooks(),
     mySkin: resolveSkin(progress.skin, progress.totalCoins).id,
+    mySlot: me,
     rivals,
   });
 
@@ -216,7 +220,7 @@ function hostEndMatch() {
     const fin = m.finals.get(p.slot);
     const live = m.states.get(p.slot);
     const s = fin || (live ? { d: Math.floor(live.d), sc: Math.floor(live.sc), co: live.co || 0 } : { d: 0, sc: 0, co: 0 });
-    return { slot: p.slot, name: p.name, ...s };
+    return { slot: p.slot, name: p.name || slotName(p.slot), ...s };
   }).sort((a, b) => b.d - a.d);
 
   // empate no topo (ou ninguém saiu do lugar) não tem vencedor
@@ -247,10 +251,10 @@ function onMatchEnd({ rows, win }) {
 
   finishMatch({
     rows: rows.map(r => ({
-      name: r.name, dist: r.d, score: r.sc, coins: r.co,
+      slot: r.slot, name: r.name, dist: r.d, score: r.sc, coins: r.co,
       win: r.slot === win, you: r.slot === me,
     })),
-    title: noWinner ? 'EMPATE!' : slotName(win).toUpperCase(),
+    title: noWinner ? 'EMPATE!' : (rows.find(r => r.slot === win)?.name || slotName(win)).toUpperCase(),
     trophy: noWinner ? '🤝' : (iWon ? '🏆' : '🏁'),
     note: noWinner ? 'Ninguém abriu vantagem.' : (iWon ? 'Você venceu! 🎉' : 'Peça revanche!'),
     records: recordLabels(records, mine),
@@ -368,17 +372,17 @@ function wireNet() {
   const progress = store.getProgress();
   const mySkinId = resolveSkin(progress.skin, progress.totalCoins).id;
 
-  net.onJoin = (slot) => {
-    // o registro real do jogador acontece no HELLO, que traz a skin
+  net.onJoin = () => {
+    // o registro real do jogador acontece no HELLO, que traz skin e apelido
     sfx.coin();
-    ui.toast(`${slotName(slot)} entrou na sala`);
   };
 
   net.onLeave = (slot) => {
+    const gone = nameOf(slot);
     lobby.players.delete(slot);
     m.states.delete(slot);
     if (scene && phase === 'running') scene.remoteDead(slot);
-    ui.toast(`${slotName(slot)} saiu`);
+    ui.toast(`${gone} saiu`);
     if (phase === 'lobby' || phase === 'room') { hostSyncRoster(); renderLobby(); }
     else if (phase === 'running' || phase === 'countdown') {
       m.finals.set(slot, m.finals.get(slot) || lastKnown(slot));
@@ -393,12 +397,15 @@ function wireNet() {
 
   // ---- host ----
   net.on(MSG.HELLO, (msg, slot) => {
+    // apelido vem de outro aparelho: passa pelo mesmo saneamento do local
+    const nick = store.sanitizeName(msg.name) || slotName(slot);
     lobby.players.set(slot, {
-      slot, name: slotName(slot),
+      slot, name: nick,
       skin: resolveSkin(msg.skin, Infinity).id,
       ready: false,
     });
     hostSyncRoster();
+    ui.toast(`${nick} entrou na sala`);
     if (phase === 'room' || phase === 'lobby') enterLobby();
   });
 
@@ -410,7 +417,10 @@ function wireNet() {
 
   net.on(MSG.SKIN, (msg, slot) => {
     const p = lobby.players.get(slot);
-    if (p) p.skin = resolveSkin(msg.skin, Infinity).id;
+    if (p) {
+      p.skin = resolveSkin(msg.skin, Infinity).id;
+      if (msg.name !== undefined) p.name = store.sanitizeName(msg.name) || slotName(slot);
+    }
     hostSyncRoster();
   });
 
@@ -423,13 +433,13 @@ function wireNet() {
     const st = m.states.get(slot);
     if (st) m.states.set(slot, { ...st, dead: true });
     if (scene) scene.remoteDead(slot);
-    if (!m.selfDead) ui.hudMessage(`💀 ${slotName(slot)} caiu!`, 2200);
+    if (!m.selfDead) ui.hudMessage(`💀 ${nameOf(slot)} caiu!`, 2200);
     hostCheckEnd();
   });
 
   net.on(MSG.AGAIN, (_msg, slot) => {
     m.againVotes.add(slot);
-    ui.toast(`${slotName(slot)} quer revanche!`);
+    ui.toast(`${nameOf(slot)} quer revanche!`);
   });
 
   // ---- convidado ----
@@ -469,6 +479,22 @@ function wireNet() {
   return mySkinId;
 }
 
+// Propaga skin/apelido para a sala. No host é uma edição direta do roster;
+// no convidado vira uma mensagem para o host redistribuir.
+function broadcastMyIdentity() {
+  if (!net || !net.connected) return;
+  const p = store.getProgress();
+  const skin = resolveSkin(p.skin, p.totalCoins).id;
+  const name = store.sanitizeName(p.name);
+  if (net.role === 'host') {
+    const me = lobby.players.get(0);
+    if (me) { me.skin = skin; me.name = name || slotName(0); }
+    hostSyncRoster();
+  } else {
+    net.send({ t: MSG.SKIN, skin, name });
+  }
+}
+
 function lastKnown(slot) {
   const st = m.states.get(slot);
   return st ? { d: Math.floor(st.d), sc: Math.floor(st.sc), co: st.co || 0 } : { d: 0, sc: 0, co: 0 };
@@ -491,7 +517,8 @@ async function createRoom() {
     const progress = store.getProgress();
     lobby = {
       players: new Map([[0, {
-        slot: 0, name: slotName(0),
+        slot: 0,
+        name: store.sanitizeName(progress.name) || slotName(0),
         skin: resolveSkin(progress.skin, progress.totalCoins).id,
         ready: true,
       }]]),
@@ -516,7 +543,7 @@ async function joinRoom(code) {
   try {
     await net.joinRoom(code);
     resetMatch('net');
-    net.send({ t: MSG.HELLO, skin });
+    net.send({ t: MSG.HELLO, skin, name: store.sanitizeName(store.getProgress().name) });
     // o lobby abre quando o ROSTER chegar
   } catch (err) {
     console.error(err);
@@ -562,6 +589,11 @@ function showMenu() {
     play: () => showMultiplayer(),
     solo: () => prepareMatch(soloConfig()),
     skins: () => showSkins(),
+    setName: (v) => {
+      store.setName(v);
+      broadcastMyIdentity();
+      showMenu();
+    },
     resetProgress: () => { store.resetProgress(); showMenu(); },
   });
 }
@@ -572,7 +604,7 @@ async function showSkins() {
   ui.showSkins(store.getProgress(), (id) => game.textures.getBase64(textureKey(id)), {
     pick: (id) => {
       store.setSkin(id);
-      if (net && net.connected) net.send({ t: MSG.SKIN, skin: id });
+      broadcastMyIdentity();
       showSkins();
     },
     back: () => showMenu(),
