@@ -98,6 +98,28 @@ export const GAMES = [
     load: () => import('./bomb/BombGame.js'),
   },
   {
+    id: 'tag',
+    name: 'Pega-Pega',
+    emoji: '👹',
+    tagline: 'Corra. Se esconda. Não deixe te pegarem',
+    description: 'Arena vista de cima: um jogador pega, os outros fogem. Encostou, trocou — quem for pego vira o pegador. Pontos por fugir, capturar e sobreviver até o fim. Sozinho, treine contra o Robô.',
+    category: 'arcade',
+    minPlayers: 1,     // treino solo contra o Robô; com amigos é 2-4
+    maxPlayers: 4,
+    accent: '#d45de0',
+    settings: [{
+      id: 'rounds',
+      label: 'Rodadas',
+      default: '3',
+      choices: [
+        { id: '1', label: '1', emoji: '⚡', desc: 'Rodada única' },
+        { id: '3', label: '3', emoji: '🎯', desc: 'Melhor de três' },
+        { id: '5', label: '5', emoji: '🏆', desc: 'Série longa' },
+      ],
+    }],
+    load: () => import('./tag/TagGame.js'),
+  },
+  {
     id: 'guess',
     name: 'Adivinhe',
     emoji: '🔥',

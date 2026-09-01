@@ -513,6 +513,13 @@ const HOWTO = {
     ['🎁', 'Caixotes escondem itens', 'alcance, bombas, velocidade, escudo'],
     ['☠️', 'Rodada demorando?', 'a arena fecha em lava'],
   ],
+  tag: [
+    ['🕹️', 'Arraste em qualquer lugar', 'joystick para correr'],
+    ['👹', 'Um jogador pega', 'aura vermelha e 👹 na cabeça'],
+    ['🤝', 'Encostou, trocou', 'quem for pego vira o pegador'],
+    ['⚡🛡️❄️', 'Pegue os itens', 'velocidade, escudo e congelar'],
+    ['⏱️', '90 segundos', 'fuja, capture e some pontos'],
+  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],
