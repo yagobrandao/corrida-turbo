@@ -144,6 +144,23 @@ const ARTS = {
     <path d="M64 62 q8 -2 14 2 M62 74 q8 -2 14 2" stroke="#fff" stroke-width="2.6" fill="none" opacity=".6" stroke-linecap="round"/>
   `, 'tag'),
 
+  td: (a) => thumbWrap(a, `
+    <path d="M0 66 h48 v-30 h40 v60 h72" stroke="#c9a56b" stroke-width="22" fill="none"/>
+    <g transform="translate(132 84)">
+      <rect x="-14" y="-10" width="28" height="22" rx="3" fill="#d9c9a3" stroke="${OUTLINE}" stroke-width="2.5"/>
+      <rect x="-14" y="-16" width="7" height="8" fill="#d9c9a3"/><rect x="7" y="-16" width="7" height="8" fill="#d9c9a3"/>
+      <path d="M-4 -14 L0 -26 L4 -14 Z" fill="#e8483f"/>
+    </g>
+    <g transform="translate(66 22)">
+      <rect x="-9" y="-4" width="18" height="22" rx="4" fill="#1b6bb0" stroke="${OUTLINE}" stroke-width="2.5"/>
+      <rect x="-5" y="-14" width="10" height="12" rx="3" fill="#39a9f4"/>
+    </g>
+    <circle cx="30" cy="66" r="9" fill="#8fe66a" stroke="${OUTLINE}" stroke-width="2.5"/>
+    <circle cx="27" cy="64" r="2" fill="${OUTLINE}"/><circle cx="34" cy="64" r="2" fill="${OUTLINE}"/>
+    <path d="M60 34 L94 58" stroke="#ffd23e" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="94" cy="58" r="4" fill="#ffd23e"/>
+  `, 'td'),
+
   guess: (a) => thumbWrap(a, `
     <g transform="translate(80 34)">
       <rect x="-34" y="-22" width="68" height="42" rx="12" fill="#fff"/>

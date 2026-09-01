@@ -120,6 +120,19 @@ export const GAMES = [
     load: () => import('./tag/TagGame.js'),
   },
   {
+    id: 'td',
+    name: 'Torre & Cerco',
+    emoji: '🏰',
+    tagline: 'Defenda a base contra as ondas',
+    description: 'Tower defense de partidas rápidas: posicione arqueiros, magos, gelo e canhões ao longo do caminho e segure ondas cada vez maiores. Ganhe moedas permanentes e volte mais forte.',
+    category: 'arcade',
+    minPlayers: 1,
+    maxPlayers: 1,
+    soloOnly: true,     // não aparece em criar sala nem no diretório
+    accent: '#d9a410',
+    load: () => import('./td/TDGame.js'),
+  },
+  {
     id: 'guess',
     name: 'Adivinhe',
     emoji: '🔥',

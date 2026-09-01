@@ -272,8 +272,10 @@ export function showGameDetail(gameId, actions) {
           <div class="gc-meta">${playersLabel(g)} jogadores</div>
         </div>
       </div>
-      <button class="btn green" data-a="create">${icon('sparkles')} CRIAR PARTIDA</button>
-      ${g.minPlayers <= 1 ? '<button class="btn ghost" data-a="solo">🏃 TREINAR SOZINHO</button>' : ''}
+      ${g.soloOnly
+        ? '<button class="btn-mega" data-a="solo" style="font-size:19px">JOGAR</button>'
+        : `<button class="btn green" data-a="create">${icon('sparkles')} CRIAR PARTIDA</button>
+           ${g.minPlayers <= 1 ? '<button class="btn ghost" data-a="solo">TREINAR SOZINHO</button>' : ''}`}
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
   `);
@@ -312,7 +314,7 @@ export function showCreate(form, actions) {
       <div class="form-block">
         <div class="form-label">ESCOLHA SEU JOGO</div>
         <div class="game-picker">
-          ${GAMES.map(x => `
+          ${GAMES.filter(x => !x.soloOnly).map(x => `
             <button class="gp ${x.id === form.gameId ? 'on' : ''}" data-game="${x.id}">
               ${gameArt(x)}
               <span class="gp-n">${esc(x.name)}</span>
@@ -728,6 +730,13 @@ const HOWTO = {
     ['🤝', 'Encostou, trocou', 'quem for pego vira o pegador'],
     ['⚡🛡️❄️', 'Pegue os itens', 'velocidade, escudo e congelar'],
     ['⏱️', '90 segundos', 'fuja, capture e some pontos'],
+  ],
+  td: [
+    ['👆', 'Toque num espaço livre', 'abre o menu de construção'],
+    ['🏹', 'Cada torre tem um papel', 'arqueiro, mago, gelo e canhão'],
+    ['⬆️', 'Toque numa torre', 'melhora, especializa ou vende'],
+    ['⏱️', 'Entre as ondas', 'prepare-se ou toque em INICIAR AGORA'],
+    ['❤️', 'Inimigo que passa tira vida', 'zerou, acabou — vale a melhor onda'],
   ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
