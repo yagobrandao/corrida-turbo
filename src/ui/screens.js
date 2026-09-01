@@ -738,6 +738,13 @@ const HOWTO = {
     ['⏱️', 'Entre as ondas', 'prepare-se ou toque em INICIAR AGORA'],
     ['❤️', 'Inimigo que passa tira vida', 'zerou, acabou — vale a melhor onda'],
   ],
+  island: [
+    ['🕹️', 'Arraste para andar', 'joystick em qualquer lugar da tela'],
+    ['🌳', 'Aproxime-se e toque em COLETAR', 'madeira, pedra, fibra e fruta'],
+    ['🏗️', 'Construa no acampamento', 'fogueira, abrigo e bancada'],
+    ['🔨', 'Na bancada', 'melhore machado e picareta'],
+    ['💾', 'Tudo fica salvo', 'a ilha continua de onde você parou'],
+  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],

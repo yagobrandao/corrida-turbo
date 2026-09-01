@@ -49,6 +49,9 @@ export const METRICS = {
   tdWave:        (ev) => g(ev, 'td', 'wave'),
   tdKills:       (ev) => g(ev, 'td', 'kills'),
   tdBosses:      (ev) => g(ev, 'td', 'bosses'),
+
+  islandGather:  (ev) => g(ev, 'island', 'gathered'),
+  islandBuilt:   (ev) => g(ev, 'island', 'built'),
 };
 
 // ------------------------------------------------------------------
@@ -76,6 +79,7 @@ export const DAILY_POOL = [
   D('d_score1k',  '⭐', 'Faça 1.000 pontos numa partida',  'score',        1000, 80, 'best'),
   D('d_td8',      '🏰', 'Chegue à onda 8 no Torre & Cerco', 'tdWave',      8,   90, 'best'),
   D('d_td60',     '⚔️', 'Derrote 60 inimigos defendendo',   'tdKills',     60,  70),
+  D('d_isl40',    '🏝️', 'Colete 40 recursos na ilha',       'islandGather', 40, 80),
 ];
 
 // Permanentes, de longo prazo. Ficam sempre visíveis.
@@ -110,6 +114,8 @@ export const ACHIEVEMENTS = [
   A('a_guess10',  '🧠', 'Vocabulário afiado', 'Acerte 10 palavras no Adivinhe',    'guessCorrect', 10, 300),
   A('a_td15',     '🏰', 'Muralha viva',       'Chegue à onda 15 no Torre & Cerco', 'tdWave',       15, 350, 'best'),
   A('a_tdboss',   '👑', 'Caçador de golens',  'Derrote 3 chefes defendendo',       'tdBosses',      3, 300),
+  A('a_isl500',   '🪓', 'Lenhador',           'Colete 500 recursos na ilha',       'islandGather', 500, 400),
+  A('a_islbase',  '🏠', 'Lar, doce lar',      'Construa as 3 estruturas da ilha',  'islandBuilt',    3, 350, 'best'),
   A('a_streak3',  '🔥', 'Três dias',          'Jogue em 3 dias diferentes',        '__streak',      3, 250),
   A('a_streak7',  '📅', 'Semana cheia',       'Jogue em 7 dias diferentes',        '__streak',      7, 600),
   A('a_full4',    '🎉', 'Sala cheia',         'Jogue numa sala com 4 jogadores',   'fullRoom',      1, 300),

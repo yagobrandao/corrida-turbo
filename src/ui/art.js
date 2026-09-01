@@ -161,6 +161,24 @@ const ARTS = {
     <circle cx="94" cy="58" r="4" fill="#ffd23e"/>
   `, 'td'),
 
+  island: (a) => thumbWrap(a, `
+    <ellipse cx="80" cy="88" rx="86" ry="30" fill="#2b7fd4"/>
+    <ellipse cx="80" cy="82" rx="64" ry="22" fill="#e8d194"/>
+    <ellipse cx="80" cy="78" rx="48" ry="16" fill="#8fca5e"/>
+    <g transform="translate(52 40)">
+      <rect x="-3" y="14" width="7" height="18" rx="3" fill="#6b4a2e"/>
+      <circle cx="0" cy="10" r="13" fill="#2f8f5b"/>
+      <circle cx="-8" cy="4" r="7" fill="#3fae70"/><circle cx="8" cy="3" r="7" fill="#3fae70"/>
+    </g>
+    <g transform="translate(104 58)">
+      <rect x="-8" y="4" width="16" height="5" rx="2" fill="#6b4a2e"/>
+      <path d="M0 -10 L-7 6 L7 6 Z" fill="#ff8b3d"/>
+      <path d="M0 -4 L-4 5 L4 5 Z" fill="#ffd23e"/>
+    </g>
+    ${mini(78, 62, '#7fd0ff', 0.8)}
+    <circle cx="24" cy="20" r="2.6" fill="#fff" opacity=".7"/><circle cx="140" cy="26" r="2" fill="#fff" opacity=".5"/>
+  `, 'island'),
+
   guess: (a) => thumbWrap(a, `
     <g transform="translate(80 34)">
       <rect x="-34" y="-22" width="68" height="42" rx="12" fill="#fff"/>
