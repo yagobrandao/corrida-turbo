@@ -9,6 +9,7 @@ import { slotName } from '../../core/config.js';
 import { getPrefs, setSound, setMusic } from '../../core/audio.js';
 import { getProgress } from '../../core/storage.js';
 import { resolveSkin } from '../runner/skins.js';
+import { resolveCosmetics } from '../../core/cosmetics.js';
 import {
   ROUND_TIME, CATCH_DIST, SWAP_IMMUNITY, POWERS, POWER_EVERY,
   HUNT_BOOST_EVERY, HUNT_BOOST_MAX,
@@ -67,7 +68,8 @@ export function createGame(ctx) {
 
   const progress = getProgress();
   const mySkin = resolveSkin(progress.skin, progress.totalCoins).id;
-  const roster = players.map(p => ({ ...p, skin: p.skin || mySkin }));
+  const myCos = resolveCosmetics(progress);
+  const roster = players.map(p => ({ ...p, skin: p.skin || mySkin, cos: p.cos || (p.slot === mySlot ? myCos : null) }));
   const nameOf = (slot) => slot === BOT_SLOT ? 'Robô'
     : (players.find(p => p.slot === slot)?.name) || slotName(slot);
 

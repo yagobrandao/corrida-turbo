@@ -64,7 +64,7 @@ export default class TagScene extends Phaser.Scene {
     roster.forEach((p, i) => {
       const sp = spawns[i % spawns.length];
       const x = this.cx(sp.c), y = this.cy(sp.r);
-      const tex = ensureRunnerTexture(this, p.skin || 'azul', p.slot);
+      const tex = ensureRunnerTexture(this, p.skin || 'azul', p.slot, p.cos);
       const aura = this.add.circle(x, y, tile * 0.55, 0xe8483f, 0.25)
         .setStrokeStyle(3, 0xe8483f, 0.9).setDepth(4).setVisible(false);
       const shadow = this.add.ellipse(x, y + tile * 0.34, tile * 0.62, tile * 0.2, 0x000000, 0.3).setDepth(5);

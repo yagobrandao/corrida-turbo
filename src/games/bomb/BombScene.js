@@ -60,7 +60,7 @@ export default class BombScene extends Phaser.Scene {
     this.players.forEach((p, i) => {
       const sp = spawns[i % spawns.length];
       const x = this.cx(sp.c), y = this.cy(sp.r);
-      const tex = ensureRunnerTexture(this, p.skin || 'azul', p.slot);
+      const tex = ensureRunnerTexture(this, p.skin || 'azul', p.slot, p.cos);
       const shadow = this.add.ellipse(x, y + tile * 0.34, tile * 0.62, tile * 0.2, 0x000000, 0.3).setDepth(5);
       const spr = this.add.image(x, y, tex).setScale((tile * 1.06) / 104).setDepth(6);
       const label = this.add.text(x, y - tile * 0.68, p.name, {

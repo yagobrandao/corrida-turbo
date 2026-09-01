@@ -7,6 +7,7 @@ import { GRACE_AFTER_DEATH, DEFAULT_DIFFICULTY } from './config.js';
 import { STATE_HZ, slotName } from '../../core/config.js';
 import { getProgress, upgradeLevel } from '../../core/storage.js';
 import { resolveSkin } from './skins.js';
+import { resolveCosmetics } from '../../core/cosmetics.js';
 import { POWERUPS, effectiveValue } from './powerups.js';
 import { getPrefs, setSound, setMusic } from '../../core/audio.js';
 import * as ui from '../../ui/gameui.js';
@@ -53,7 +54,7 @@ export function createGame(ctx) {
   const progress = getProgress();
   const rivals = players
     .filter(p => p.slot !== mySlot)
-    .map(p => ({ slot: p.slot, name: p.name, skin: p.skin }));
+    .map(p => ({ slot: p.slot, name: p.name, skin: p.skin, cos: p.cos }));
 
   // ---------------- HUD ----------------
   ui.showHUD(HUD_HTML);
@@ -139,6 +140,7 @@ export function createGame(ctx) {
       seed, difficulty, hooks, rivals, mySlot, puValues,
       isNet: bus.online,
       mySkin: resolveSkin(progress.skin, progress.totalCoins).id,
+      myCos: resolveCosmetics(progress),
     };
     if (sc.scene.isActive() || sc.scene.isPaused()) sc.scene.restart(data);
     else phaser.scene.start(sceneKey, data);

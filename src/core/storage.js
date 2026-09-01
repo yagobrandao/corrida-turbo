@@ -12,6 +12,9 @@ const DEFAULTS = {
   races: 0,
   wins: 0,
   skin: 'azul',
+  hat: 'none',       // cosméticos equipados
+  face: 'none',
+  owned: [],         // ids de cosméticos comprados
   name: '',          // apelido; vazio = usa "Jogador N" do slot
   diff: 'normal',    // última dificuldade escolhida, reaproveitada na próxima sala
   howto: {},         // por jogo: já viu as instruções?
@@ -42,6 +45,21 @@ function write() {
 
 export function getProgress() {
   return { ...read() };
+}
+
+// Cosméticos: comprar debita as moedas e registra a posse.
+export function buyCosmetic(id, cost) {
+  const p = read();
+  if ((p.owned || []).includes(id)) return true;
+  if (!spendCoins(cost)) return false;
+  p.owned = [...(p.owned || []), id];
+  write();
+  return true;
+}
+
+export function equipCosmetic(slot, id) {
+  const p = read();
+  if (slot === 'hat' || slot === 'face') { p[slot] = id; write(); }
 }
 
 export function setSkin(id) {

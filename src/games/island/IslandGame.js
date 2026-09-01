@@ -7,6 +7,7 @@ import IslandScene from './IslandScene.js';
 import { getProgress } from '../../core/storage.js';
 import { getPrefs, setSound, setMusic } from '../../core/audio.js';
 import { resolveSkin } from '../runner/skins.js';
+import { resolveCosmetics } from '../../core/cosmetics.js';
 import { ITEMS, TOOLS, islandLevel, coinsForSession } from './config.js';
 import * as ui from '../../ui/gameui.js';
 import { icon } from '../../ui/icons.js';
@@ -137,7 +138,7 @@ export function createGame(ctx) {
   const progress = getProgress();
   const sceneKey = 'island';
   if (!phaser.scene.getScene(sceneKey)) phaser.scene.add(sceneKey, IslandScene, false);
-  const data = { hooks, world, skin: resolveSkin(progress.skin, progress.totalCoins).id };
+  const data = { hooks, world, skin: resolveSkin(progress.skin, progress.totalCoins).id, cos: resolveCosmetics(progress) };
   const sc = phaser.scene.getScene(sceneKey);
   if (sc.scene.isActive() || sc.scene.isPaused()) sc.scene.restart(data);
   else phaser.scene.start(sceneKey, data);

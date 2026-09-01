@@ -11,6 +11,7 @@ import { openScanner } from './qrscan.js';
 import { charSVG, gameArt, levelInfo } from './art.js';
 import { SLOT_COLORS } from '../core/config.js';
 import { icon } from './icons.js';
+import { HATS, FACES, ownsCosmetic, resolveCosmetics } from '../core/cosmetics.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
@@ -422,7 +423,7 @@ export function showLobby(state, actions) {
     // o boneco já aparece na COR que o jogador terá dentro da partida
     slots.push(`
       <div class="stage-slot" style="animation-delay:${i * 0.08}s">
-        <div class="stage-char" style="animation-delay:${i * 0.4}s">${charSVG(p.skin || 'azul', { size: 62, tint: SLOT_COLORS[i % SLOT_COLORS.length] })}</div>
+        <div class="stage-char" style="animation-delay:${i * 0.4}s">${charSVG(p.skin || 'azul', { size: 62, tint: SLOT_COLORS[i % SLOT_COLORS.length], cos: p.cos })}</div>
         <div class="stage-name" style="color:${slotHex(i)}">${p.isHost ? icon('crown', 'gi-gold') + ' ' : ''}${esc(p.name)}${p.isYou ? ' ' + icon('roundStar', 'gi-gold') : ''}</div>
         <div class="stage-stat ${p.ready ? 'ok' : ''}">${p.ready ? icon('checkMark') + ' PRONTO' : 'esperando…'}</div>
       </div>`);
@@ -629,16 +630,33 @@ export function showRewards({ unlocked, claimedNow }, onClose) {
 }
 
 // ================================================================ PERSONAGENS
-export function showSkins(progress, preview, actions) {
+export function showSkins(progress, preview, actions, tab = 'skin') {
   const current = SKINS.find(s => s.id === progress.skin) || SKINS[0];
+  const cos = resolveCosmetics(progress);
+  const owned = progress.owned || [];
+
   const cards = SKINS.map(s => {
     const unlocked = isUnlocked(s, progress.totalCoins);
     const sel = s.id === progress.skin;
     return `
       <div class="skin-card ${sel ? 'on' : ''} ${unlocked ? '' : 'locked'}" data-skin="${s.id}">
-        ${charSVG(s.id, { size: 42, blink: false })}
+        ${charSVG(s.id, { size: 42, blink: false, cos })}
         <div class="sn">${unlocked ? esc(s.name) : '🔒'}</div>
         <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : icon('twoCoins', 'gi-gold') + ' ' + nf(s.cost)}</div>
+      </div>`;
+  }).join('');
+
+  // vitrine de cosméticos: cada card mostra o SEU boneco com a peça vestida
+  const list = tab === 'hat' ? HATS : FACES;
+  const cosCards = list.map(it => {
+    const has = ownsCosmetic(it, owned);
+    const sel = cos[tab] === it.id;
+    const previewCos = tab === 'hat' ? { ...cos, hat: it.id } : { ...cos, face: it.id };
+    return `
+      <div class="skin-card ${sel ? 'on' : ''} ${has ? '' : 'locked'}" data-cos="${it.id}" data-slot="${tab}">
+        ${charSVG(progress.skin, { size: 42, blink: false, cos: previewCos })}
+        <div class="sn">${esc(it.name)}</div>
+        <div class="sc">${has ? (sel ? 'em uso' : 'disponível') : icon('twoCoins', 'gi-gold') + ' ' + nf(it.cost)}</div>
       </div>`;
   }).join('');
 
@@ -646,22 +664,25 @@ export function showSkins(progress, preview, actions) {
     <div class="screen">
       ${sceneDeco()}
       <div class="char-hero">
-        <div class="hero-char">${charSVG(progress.skin, { size: 128 })}</div>
+        <div class="hero-char">${charSVG(progress.skin, { size: 128, cos })}</div>
         <div class="hero-podium"></div>
         <h2>${esc(current.name).toUpperCase()}</h2>
         <div class="coin-bar">${icon('twoCoins')} ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
       </div>
-      <div class="equip-row">
-        <div class="equip-slot"><span class="es-i">🎩</span><span class="es-t">CABEÇA</span><span class="es-s">em breve</span></div>
-        <div class="equip-slot"><span class="es-i">👕</span><span class="es-t">CORPO</span><span class="es-s">em breve</span></div>
-        <div class="equip-slot"><span class="es-i">✨</span><span class="es-t">EXTRA</span><span class="es-s">em breve</span></div>
+      <div class="filters">
+        <button class="filter ${tab === 'skin' ? 'on' : ''}" data-ctab="skin">Personagem</button>
+        <button class="filter ${tab === 'hat' ? 'on' : ''}" data-ctab="hat">Chapéus</button>
+        <button class="filter ${tab === 'face' ? 'on' : ''}" data-ctab="face">Rostos</button>
       </div>
-      <div class="skin-grid">${cards}</div>
-      <p class="hint">Nas salas, a cor vem da sua posição — o personagem define o formato. Junte moedas jogando para destravar novos.</p>
+      <div class="skin-grid">${tab === 'skin' ? cards : cosCards}</div>
+      <p class="hint">${tab === 'skin'
+        ? 'Nas salas, a cor vem da sua posição — o personagem define o formato.'
+        : 'Compre com moedas. O que você equipar aparece em todos os jogos.'}</p>
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
   `);
-  node.querySelectorAll('.skin-card').forEach(card => {
+  bindAll(node, '[data-ctab]', (b) => actions.tab(b.dataset.ctab));
+  node.querySelectorAll('[data-skin]').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.dataset.skin;
       const skin = SKINS.find(s => s.id === id);
@@ -672,6 +693,19 @@ export function showSkins(progress, preview, actions) {
       }
       sfx.powerup();
       actions.pick(id);
+    });
+  });
+  node.querySelectorAll('[data-cos]').forEach(card => {
+    card.addEventListener('click', () => {
+      const slot = card.dataset.slot;
+      const item = (slot === 'hat' ? HATS : FACES).find(x => x.id === card.dataset.cos);
+      unlockAudio();
+      if (ownsCosmetic(item, owned)) { sfx.powerup(); actions.equip(slot, item.id); return; }
+      if (progress.coins < item.cost) {
+        toast(`Faltam ${nf(item.cost - progress.coins)} moedas para ${item.name}`);
+        return;
+      }
+      actions.buy(slot, item.id, item.cost);
     });
   });
   bind(node, '[data-a=back]', actions.back);

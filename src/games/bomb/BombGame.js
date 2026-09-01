@@ -8,6 +8,7 @@ import { slotName } from '../../core/config.js';
 import { getPrefs, setSound, setMusic } from '../../core/audio.js';
 import { getProgress } from '../../core/storage.js';
 import { resolveSkin } from '../runner/skins.js';
+import { resolveCosmetics } from '../../core/cosmetics.js';
 import { BASE_RANGE, ROUND_POINTS, DROPS } from './config.js';
 import * as ui from '../../ui/gameui.js';
 
@@ -50,7 +51,8 @@ export function createGame(ctx) {
 
   const progress = getProgress();
   const mySkin = resolveSkin(progress.skin, progress.totalCoins).id;
-  const roster = players.map(p => ({ ...p, skin: p.skin || mySkin }));
+  const myCos = resolveCosmetics(progress);
+  const roster = players.map(p => ({ ...p, skin: p.skin || mySkin, cos: p.cos || (p.slot === mySlot ? myCos : null) }));
   const nameOf = (slot) => (players.find(p => p.slot === slot)?.name) || slotName(slot);
 
   // ---------------- HUD ----------------

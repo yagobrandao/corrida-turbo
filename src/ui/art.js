@@ -17,7 +17,74 @@ const OUTLINE = '#1c2440';
 // ------------------------------------------------------------------
 // Personagem (mesma anatomia do runner: cápsula + barriga + adereço)
 // ------------------------------------------------------------------
-export function charSVG(skinId, { size = 120, tint = null, blink = true } = {}) {
+// Cosméticos em SVG — espelham drawHat/drawFace de textures.js nas mesmas
+// coordenadas, para o boneco das telas ser igual ao das partidas.
+function hatSVG(hat) {
+  switch (hat) {
+    case 'cap': return `
+      <rect x="11" y="8" width="54" height="18" rx="9" fill="${OUTLINE}"/>
+      <rect x="13" y="10" width="50" height="14" rx="7" fill="#e8483f"/>
+      <rect x="13" y="20" width="62" height="7" rx="3.5" fill="#9c2820"/>`;
+    case 'party': return `
+      <path d="M38 -4 L20 26 L56 26 Z" fill="${OUTLINE}"/>
+      <path d="M38 1 L24 24 L52 24 Z" fill="#ffd23e"/>
+      <path d="M38 1 L30 16 L44 16 Z" fill="#e8483f"/>
+      <circle cx="38" cy="-2" r="5" fill="#3ddad7"/>`;
+    case 'top': return `
+      <rect x="8" y="20" width="60" height="8" rx="4" fill="${OUTLINE}"/>
+      <rect x="20" y="-6" width="36" height="28" rx="4" fill="${OUTLINE}"/>
+      <rect x="22" y="-4" width="32" height="24" rx="3" fill="#2a2358"/>
+      <rect x="22" y="12" width="32" height="6" fill="#ffd23e"/>`;
+    case 'horns': return `
+      <path d="M16 24 L26 24 L12 0 Z" fill="${OUTLINE}"/>
+      <path d="M60 24 L50 24 L64 0 Z" fill="${OUTLINE}"/>
+      <path d="M18 22 L25 22 L14 4 Z" fill="#e8483f"/>
+      <path d="M58 22 L51 22 L62 4 Z" fill="#e8483f"/>`;
+    case 'halo': return `
+      <ellipse cx="38" cy="6" rx="21" ry="7" fill="none" stroke="#ffd23e" stroke-width="5"/>
+      <ellipse cx="38" cy="6" rx="21" ry="7" fill="none" stroke="#fff3c4" stroke-width="2"/>`;
+    case 'crown': return `
+      <path d="M14 26 L26 26 L20 2 Z" fill="${OUTLINE}"/>
+      <path d="M30 26 L46 26 L38 -4 Z" fill="${OUTLINE}"/>
+      <path d="M50 26 L62 26 L56 2 Z" fill="${OUTLINE}"/>
+      <rect x="14" y="20" width="48" height="8" fill="${OUTLINE}"/>
+      <path d="M17 24 L25 24 L21 7 Z" fill="#ffd23e"/>
+      <path d="M33 24 L45 24 L39 2 Z" fill="#ffd23e"/>
+      <path d="M51 24 L59 24 L55 7 Z" fill="#ffd23e"/>
+      <rect x="16" y="21" width="44" height="5" fill="#ffd23e"/>`;
+    default: return '';
+  }
+}
+
+function faceSVG(face, ey) {
+  switch (face) {
+    case 'happy': return `
+      <path d="M20 ${ey + 2} a8 8 0 0 1 16 0" fill="none" stroke="${OUTLINE}" stroke-width="4" stroke-linecap="round"/>
+      <path d="M40 ${ey + 2} a8 8 0 0 1 16 0" fill="none" stroke="${OUTLINE}" stroke-width="4" stroke-linecap="round"/>`;
+    case 'cool': return `
+      <rect x="14" y="${ey - 9}" width="48" height="17" rx="6" fill="${OUTLINE}"/>
+      <rect x="17" y="${ey - 6}" width="18" height="11" rx="4" fill="#2a2358"/>
+      <rect x="41" y="${ey - 6}" width="18" height="11" rx="4" fill="#2a2358"/>
+      <rect x="19" y="${ey - 4}" width="6" height="3" fill="#fff" opacity=".4"/>`;
+    case 'angry': return `
+      <circle cx="28" cy="${ey}" r="8" fill="#fff"/><circle cx="48" cy="${ey}" r="8" fill="#fff"/>
+      <circle cx="30" cy="${ey + 1}" r="4" fill="${OUTLINE}"/><circle cx="50" cy="${ey + 1}" r="4" fill="${OUTLINE}"/>
+      <path d="M18 ${ey - 13} L36 ${ey - 6} L18 ${ey - 6} Z" fill="${OUTLINE}"/>
+      <path d="M58 ${ey - 13} L40 ${ey - 6} L58 ${ey - 6} Z" fill="${OUTLINE}"/>`;
+    case 'wink': return `
+      <circle cx="28" cy="${ey}" r="8" fill="#fff"/>
+      <circle cx="30" cy="${ey + 1}" r="4" fill="${OUTLINE}"/>
+      <path d="M40 ${ey + 2} a8 8 0 0 1 16 0" fill="none" stroke="${OUTLINE}" stroke-width="4" stroke-linecap="round"/>`;
+    case 'star': return `
+      <circle cx="28" cy="${ey}" r="8" fill="#fff"/><circle cx="48" cy="${ey}" r="8" fill="#fff"/>
+      ${[28, 48].map(cx => `
+        <path d="M${cx} ${ey - 7} L${cx - 6} ${ey + 5} L${cx + 6} ${ey + 5} Z" fill="#ffd23e"/>
+        <path d="M${cx} ${ey + 7} L${cx - 6} ${ey - 5} L${cx + 6} ${ey - 5} Z" fill="#ffd23e"/>`).join('')}`;
+    default: return '';
+  }
+}
+
+export function charSVG(skinId, { size = 120, tint = null, blink = true, cos = null } = {}) {
   const skin = getSkin(skinId);
   const body = tint !== null ? hex(tint) : hex(skin.body);
   const belly = tint !== null ? hex(shade(tint, 0.45)) : hex(skin.belly);
@@ -44,7 +111,8 @@ export function charSVG(skinId, { size = 120, tint = null, blink = true } = {}) 
       break;
   }
 
-  const face = skin.feature === 'visor'
+  const customFace = cos && cos.face && cos.face !== 'none' ? faceSVG(cos.face, 42) : '';
+  const face = customFace || (skin.feature === 'visor'
     ? `
       <rect x="14" y="34" width="48" height="20" rx="10" fill="${OUTLINE}"/>
       <rect x="17" y="37" width="42" height="14" rx="7" fill="${accent}"/>
@@ -53,7 +121,7 @@ export function charSVG(skinId, { size = 120, tint = null, blink = true } = {}) 
       <g class="${blink ? 'ch-eyes' : ''}">
         <circle cx="28" cy="42" r="8" fill="#fff"/><circle cx="48" cy="42" r="8" fill="#fff"/>
         <circle cx="30" cy="43" r="4" fill="${OUTLINE}"/><circle cx="50" cy="43" r="4" fill="${OUTLINE}"/>
-      </g>`;
+      </g>`);
 
   return `
   <svg viewBox="0 0 76 104" width="${size}" height="${Math.round(size * 104 / 76)}" class="char-svg" aria-hidden="true">
@@ -66,6 +134,7 @@ export function charSVG(skinId, { size = 120, tint = null, blink = true } = {}) 
     ${face}
     <circle cx="21" cy="52" r="4" fill="#fff" opacity=".25"/>
     <circle cx="55" cy="52" r="4" fill="#fff" opacity=".25"/>
+    ${cos && cos.hat ? hatSVG(cos.hat) : ''}
   </svg>`;
 }
 

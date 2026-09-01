@@ -13,6 +13,7 @@ import { makeBus, makeOfflineBus } from './net/bus.js';
 import { announceRoom, listRooms, releaseHub } from './net/directory.js';
 import { GAMES, getGame, defaultSettings } from './games/index.js';
 import { resolveSkin } from './games/runner/skins.js';
+import { resolveCosmetics } from './core/cosmetics.js';
 import { textureKey } from './games/runner/skins.js';
 import { buildTextures } from './games/runner/textures.js';
 import { POWERUPS, MAX_LEVEL, upgradeCost, effectiveValue } from './games/runner/powerups.js';
@@ -193,6 +194,7 @@ async function createRoom() {
       players: new Map([[0, {
         slot: 0, name: myName(),
         skin: resolveSkin(progress.skin, progress.totalCoins).id,
+        cos: resolveCosmetics(progress),
         ready: true,
       }]]),
       mySlot: 0,
@@ -238,6 +240,7 @@ async function joinRoom(code) {
     net.send({
       t: MSG.HELLO,
       skin: resolveSkin(progress.skin, progress.totalCoins).id,
+      cos: resolveCosmetics(progress),
       name: myName(),
     });
     // o lobby abre quando o ROSTER chegar
@@ -291,7 +294,7 @@ function renderLobby() {
 function hostSyncRoster() {
   if (!net || net.role !== 'host') return;
   const players = [...lobby.players.values()].map(p => ({
-    slot: p.slot, name: p.name, skin: p.skin, ready: p.ready,
+    slot: p.slot, name: p.name, skin: p.skin, cos: p.cos, ready: p.ready,
   }));
   const roomInfo = {
     gameId: room.gameId, visibility: room.visibility,
@@ -316,7 +319,7 @@ function hostStartMatch() {
   const seed = makeSeed();
   const players = [...lobby.players.values()]
     .sort((a, b) => a.slot - b.slot)
-    .map(p => ({ slot: p.slot, name: p.name, skin: p.skin }));
+    .map(p => ({ slot: p.slot, name: p.name, skin: p.skin, cos: p.cos }));
   const payload = { seed, game: room.gameId, settings: room.settings, players };
   net.locked = true;   // ninguém entra no meio da partida
   net.broadcast({ t: MSG.START, ...payload });
@@ -453,7 +456,7 @@ async function startSolo(gameId) {
     seed: makeSeed(),
     game: gameId,
     settings: defaultSettings(g).difficulty ? { ...defaultSettings(g), difficulty: progress.diff } : defaultSettings(g),
-    players: [{ slot: 0, name: myName(), skin: resolveSkin(progress.skin, progress.totalCoins).id }],
+    players: [{ slot: 0, name: myName(), skin: resolveSkin(progress.skin, progress.totalCoins).id, cos: resolveCosmetics(progress) }],
   });
 }
 
@@ -491,6 +494,7 @@ function wireNet() {
     lobby.players.set(slot, {
       slot, name: nick,
       skin: resolveSkin(msg.skin, Infinity).id,
+      cos: msg.cos || null,
       ready: false,
     });
     ui.toast(`${nick} entrou na sala`);
@@ -508,6 +512,7 @@ function wireNet() {
     const p = lobby.players.get(slot);
     if (p) {
       p.skin = resolveSkin(msg.skin, Infinity).id;
+      if (msg.cos) p.cos = msg.cos;
       if (msg.name !== undefined) p.name = store.sanitizeName(msg.name) || slotName(slot);
     }
     hostSyncRoster();
@@ -556,12 +561,13 @@ function broadcastIdentity() {
   if (!net || !net.connected) return;
   const p = store.getProgress();
   const skin = resolveSkin(p.skin, p.totalCoins).id;
+  const cos = resolveCosmetics(p);
   if (net.role === 'host') {
     const me = lobby.players.get(0);
-    if (me) { me.skin = skin; me.name = myName(); }
+    if (me) { me.skin = skin; me.cos = cos; me.name = myName(); }
     hostSyncRoster();
   } else {
-    net.send({ t: MSG.IDENT, skin, name: store.sanitizeName(p.name) });
+    net.send({ t: MSG.IDENT, skin, cos, name: store.sanitizeName(p.name) });
   }
 }
 
@@ -587,17 +593,32 @@ function leaveRoom() {
 // ------------------------------------------------------------------
 // Telas auxiliares
 // ------------------------------------------------------------------
+let cosTab = 'skin';
 async function showSkinsScreen() {
   await ensurePhaser();
   phase = 'skins';
   ui.showSkins(store.getProgress(), (id) => phaser.textures.getBase64(textureKey(id)), {
+    tab: (t) => { cosTab = t; showSkinsScreen(); },
     pick: (id) => {
       store.setSkin(id);
       broadcastIdentity();
       showSkinsScreen();
     },
+    equip: (slot, id) => {
+      store.equipCosmetic(slot, id);
+      broadcastIdentity();
+      showSkinsScreen();
+    },
+    buy: (slot, id, cost) => {
+      if (!store.buyCosmetic(id, cost)) { ui.toast('Moedas insuficientes'); return; }
+      store.equipCosmetic(slot, id);
+      sfx.win();
+      ui.toast('Desbloqueado!');
+      broadcastIdentity();
+      showSkinsScreen();
+    },
     back: () => showHub(),
-  });
+  }, cosTab);
 }
 
 function showUpgrades() {

@@ -31,6 +31,7 @@ export default class RunnerScene extends Phaser.Scene {
     this.isNet = !!data.isNet;
     this.hooks = data.hooks || {};
     this.mySkin = data.mySkin || 'azul';
+    this.myCos = data.myCos || null;
     this.mySlot = data.mySlot || 0;
     this.rivals = data.rivals || [];   // [{ slot, name, skin }]
     // id do power-up -> valor efetivo (duração/potência) já com as melhorias
@@ -60,9 +61,8 @@ export default class RunnerScene extends Phaser.Scene {
     // ---------- jogador ----------
     // na sala, a cor vem do slot (ninguém fica igual a ninguém);
     // no treino solo vale a cor original da skin escolhida
-    const myTex = this.isNet
-      ? ensureRunnerTexture(this, this.mySkin, this.mySlot)
-      : textureKey(this.mySkin);
+    // na sala a cor vem do slot; no solo, slot null preserva a cor da skin
+    const myTex = ensureRunnerTexture(this, this.mySkin, this.isNet ? this.mySlot : null, this.myCos);
     this.shadow = this.add.image(this.laneX[1], this.playerY + 40, 'shadow').setDepth(8);
     this.player = this.add.image(this.laneX[1], this.playerY, myTex).setDepth(10);
     this.idleTween = this.tweens.add({
@@ -139,7 +139,7 @@ export default class RunnerScene extends Phaser.Scene {
     const color = slotColor(r.slot);
     const ring = this.add.image(this.laneX[1], this.playerY + 40, 'ring')
       .setTint(color).setAlpha(0.7).setDepth(5);
-    const sprite = this.add.image(this.laneX[1], this.playerY, ensureRunnerTexture(this, r.skin, r.slot))
+    const sprite = this.add.image(this.laneX[1], this.playerY, ensureRunnerTexture(this, r.skin, r.slot, r.cos))
       .setAlpha(0.62).setDepth(6);
     const label = this.add.text(this.laneX[1], this.playerY - 66, r.name, {
       fontFamily: 'system-ui, sans-serif', fontSize: '14px', fontStyle: 'bold',

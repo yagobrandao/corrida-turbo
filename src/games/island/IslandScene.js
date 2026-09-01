@@ -25,6 +25,7 @@ export default class IslandScene extends Phaser.Scene {
     this.hooks = data.hooks || {};
     this.world = data.world;      // estado salvo (adaptador é o dono)
     this.skin = data.skin || 'azul';
+    this.cos = data.cos || null;
   }
 
   create() {
@@ -36,7 +37,7 @@ export default class IslandScene extends Phaser.Scene {
 
     // jogador
     const p = this.world.pos || { x: CX, y: CY + 120 };
-    const tex = ensureRunnerTexture(this, this.skin, 0);
+    const tex = ensureRunnerTexture(this, this.skin, null, this.cos);
     this.shadow = this.add.ellipse(p.x, p.y + 16, 30, 10, 0x000000, 0.3).setDepth(20);
     this.player = this.add.image(p.x, p.y, tex).setScale(0.5).setDepth(21);
 
