@@ -11,7 +11,7 @@ import { openScanner } from './qrscan.js';
 import { charSVG, gameArt, levelInfo } from './art.js';
 import { SLOT_COLORS } from '../core/config.js';
 import { icon } from './icons.js';
-import { HATS, FACES, ownsCosmetic, resolveCosmetics } from '../core/cosmetics.js';
+import { SLOTS, listOf, ownsCosmetic, resolveCosmetics } from '../core/cosmetics.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
@@ -119,12 +119,13 @@ export function showHub(state, actions) {
   const { progress, rooms, loadingRooms } = state;
   const lv = levelInfo(progress.totalCoins);
   const skinId = progress.skin || 'azul';
+  const cos = resolveCosmetics(progress);
 
   const homeView = `
     <div class="hero-stage">
       <div class="hero-title">PARTY HUB</div>
       <div class="hero-sub">DUELOS ENTRE AMIGOS</div>
-      <div class="hero-char" data-a="char">${charSVG(skinId, { size: 118 })}</div>
+      <div class="hero-char" data-a="char">${charSVG(skinId, { size: 118, cos })}</div>
       <div class="hero-podium"></div>
     </div>
 
@@ -148,7 +149,7 @@ export function showHub(state, actions) {
       ${sceneDeco()}
       <div class="hub-hud">
         <button class="player-pill" data-a="name">
-          <span class="pp-avatar">${charSVG(skinId, { size: 30, blink: false })}</span>
+          <span class="pp-avatar">${charSVG(skinId, { size: 30, blink: false, cos })}</span>
           <span class="pp-body">
             <span class="pp-name">${esc(progress.name || 'Jogador')} ✏️</span>
             <span class="pp-lv"><span class="pp-lv-num">Nv ${lv.level}</span><span class="xp-bar"><span class="xp-fill" style="width:${lv.pct}%"></span></span></span>
@@ -630,58 +631,71 @@ export function showRewards({ unlocked, claimedNow }, onClose) {
 }
 
 // ================================================================ PERSONAGENS
+// Vitrine do personagem: aba "Personagem" (skins, destravadas por moedas
+// acumuladas) + uma aba por categoria de cosmético (compradas com moedas).
+// Cada card mostra o SEU boneco já vestindo a peça, para dar para imaginar.
 export function showSkins(progress, preview, actions, tab = 'skin') {
   const current = SKINS.find(s => s.id === progress.skin) || SKINS[0];
   const cos = resolveCosmetics(progress);
   const owned = progress.owned || [];
 
-  const cards = SKINS.map(s => {
+  const skinCards = SKINS.map(s => {
     const unlocked = isUnlocked(s, progress.totalCoins);
     const sel = s.id === progress.skin;
     return `
       <div class="skin-card ${sel ? 'on' : ''} ${unlocked ? '' : 'locked'}" data-skin="${s.id}">
         ${charSVG(s.id, { size: 42, blink: false, cos })}
-        <div class="sn">${unlocked ? esc(s.name) : '🔒'}</div>
+        <div class="sn">${unlocked ? esc(s.name) : icon('padlock')}</div>
         <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : icon('twoCoins', 'gi-gold') + ' ' + nf(s.cost)}</div>
       </div>`;
   }).join('');
 
-  // vitrine de cosméticos: cada card mostra o SEU boneco com a peça vestida
-  const list = tab === 'hat' ? HATS : FACES;
-  const cosCards = list.map(it => {
+  const cosCards = tab === 'skin' ? '' : listOf(tab).map(it => {
     const has = ownsCosmetic(it, owned);
     const sel = cos[tab] === it.id;
-    const previewCos = tab === 'hat' ? { ...cos, hat: it.id } : { ...cos, face: it.id };
     return `
       <div class="skin-card ${sel ? 'on' : ''} ${has ? '' : 'locked'}" data-cos="${it.id}" data-slot="${tab}">
-        ${charSVG(progress.skin, { size: 42, blink: false, cos: previewCos })}
+        ${charSVG(progress.skin, { size: 42, blink: false, cos: { ...cos, [tab]: it.id } })}
         <div class="sn">${esc(it.name)}</div>
         <div class="sc">${has ? (sel ? 'em uso' : 'disponível') : icon('twoCoins', 'gi-gold') + ' ' + nf(it.cost)}</div>
       </div>`;
   }).join('');
 
+  const hint = tab === 'skin'
+    ? 'Nas salas, a cor vem da sua posição — o personagem define o formato.'
+    : tab === 'color'
+      ? 'Vale no treino solo. Nas salas cada um fica com a cor da sua posição.'
+      : 'O que você equipar aparece em todos os jogos.';
+
+  // Layout em três faixas: cabeçalho fixo, grade que rola sozinha, botão fixo.
+  // Assim a rolagem fica contida na grade em vez de arrastar a tela inteira.
   const node = el(`
-    <div class="screen">
+    <div class="screen fixed">
       ${sceneDeco()}
-      <div class="char-hero">
-        <div class="hero-char">${charSVG(progress.skin, { size: 128, cos })}</div>
+      <div class="fixed-top char-hero">
+        <div class="hero-char">${charSVG(progress.skin, { size: 112, cos })}</div>
         <div class="hero-podium"></div>
         <h2>${esc(current.name).toUpperCase()}</h2>
-        <div class="coin-bar">${icon('twoCoins')} ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
+        <div class="coin-bar">${icon('twoCoins')} ${nf(progress.coins)} <span class="dim">moedas</span></div>
       </div>
-      <div class="filters">
+      <div class="tab-strip">
         <button class="filter ${tab === 'skin' ? 'on' : ''}" data-ctab="skin">Personagem</button>
-        <button class="filter ${tab === 'hat' ? 'on' : ''}" data-ctab="hat">Chapéus</button>
-        <button class="filter ${tab === 'face' ? 'on' : ''}" data-ctab="face">Rostos</button>
+        ${SLOTS.map(s => `<button class="filter ${tab === s.id ? 'on' : ''}" data-ctab="${s.id}">${s.name}</button>`).join('')}
       </div>
-      <div class="skin-grid">${tab === 'skin' ? cards : cosCards}</div>
-      <p class="hint">${tab === 'skin'
-        ? 'Nas salas, a cor vem da sua posição — o personagem define o formato.'
-        : 'Compre com moedas. O que você equipar aparece em todos os jogos.'}</p>
-      <button class="btn ghost" data-a="back">VOLTAR</button>
+      <div class="scroll-area">
+        <div class="skin-grid">${tab === 'skin' ? skinCards : cosCards}</div>
+        <p class="hint">${hint}</p>
+      </div>
+      <div class="fixed-bottom">
+        <button class="btn ghost" data-a="back">VOLTAR</button>
+      </div>
     </div>
   `);
   bindAll(node, '[data-ctab]', (b) => actions.tab(b.dataset.ctab));
+  // a aba ativa fica visível mesmo com a faixa rolando na horizontal
+  const active = node.querySelector('.tab-strip .on');
+  if (active) requestAnimationFrame(() => active.scrollIntoView({ inline: 'center', block: 'nearest' }));
+
   node.querySelectorAll('[data-skin]').forEach(card => {
     card.addEventListener('click', () => {
       const id = card.dataset.skin;
@@ -698,7 +712,7 @@ export function showSkins(progress, preview, actions, tab = 'skin') {
   node.querySelectorAll('[data-cos]').forEach(card => {
     card.addEventListener('click', () => {
       const slot = card.dataset.slot;
-      const item = (slot === 'hat' ? HATS : FACES).find(x => x.id === card.dataset.cos);
+      const item = listOf(slot).find(x => x.id === card.dataset.cos);
       unlockAudio();
       if (ownsCosmetic(item, owned)) { sfx.powerup(); actions.equip(slot, item.id); return; }
       if (progress.coins < item.cost) {

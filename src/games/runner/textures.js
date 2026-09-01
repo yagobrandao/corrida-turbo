@@ -2,6 +2,8 @@
 // com um traço cartoon consistente: cores chapadas + contorno escuro + brilho.
 import { SKINS, getSkin, textureKey, slotTextureKey } from './skins.js';
 import { SLOT_COLORS } from '../../core/config.js';
+import { drawParts } from '../../core/shapes.js';
+import { backParts, frontParts, faceParts, bodyColor, cosKey } from '../../core/cosmetics.js';
 
 const OUTLINE = 0x1c2440;
 
@@ -28,196 +30,88 @@ function shine(g, x, y, w, h, r) {
 
 // ---------- personagem ----------
 // Cápsula com rosto + um adereço que dá identidade a cada skin.
-const RUNNER_W = 76;
+//
+// As coordenadas são EXATAMENTE as do charSVG (ui/art.js): quadro 76×104,
+// corpo x 11..65 / y 24..96, olhos em y=42. Os cosméticos (core/cosmetics.js)
+// são listas de formas nesse mesmo quadro, interpretadas pelos dois lados.
+// A textura é mais larga que o quadro (margem PAD de cada lado) para caber
+// pets e asas; o personagem continua no centro, então nada muda nos jogos.
+const PAD = 16;
+const RUNNER_W = 76 + PAD * 2;
 const RUNNER_H = 104;
-const BODY_TOP = 26;
 
 function drawFeature(g, skin) {
   const { feature, body, accent } = skin;
   switch (feature) {
     case 'ears':
-      g.fillStyle(OUTLINE, 1);
-      g.fillCircle(23, 21, 13);
-      g.fillCircle(53, 21, 13);
-      g.fillStyle(body, 1);
-      g.fillCircle(23, 21, 10);
-      g.fillCircle(53, 21, 10);
-      g.fillStyle(accent, 1);
-      g.fillCircle(23, 21, 5);
-      g.fillCircle(53, 21, 5);
+      g.fillStyle(OUTLINE, 1); g.fillCircle(22, 16, 12); g.fillCircle(54, 16, 12);
+      g.fillStyle(body, 1); g.fillCircle(22, 16, 9); g.fillCircle(54, 16, 9);
+      g.fillStyle(accent, 1); g.fillCircle(22, 16, 4.5); g.fillCircle(54, 16, 4.5);
       break;
     case 'antenna':
-      g.fillStyle(OUTLINE, 1);
-      g.fillRect(35, 6, 6, 24);
-      g.fillCircle(38, 8, 11);
-      g.fillStyle(accent, 1);
-      g.fillCircle(38, 8, 8);
-      g.fillStyle(0xffffff, 0.5);
-      g.fillCircle(35, 5, 3);
-      break;
-    case 'visor':
-      // faixa que cobre os olhos, desenhada depois do rosto
+      g.fillStyle(OUTLINE, 1); g.fillRoundedRect(35, 2, 6, 22, 3); g.fillCircle(38, 5, 9);
+      g.fillStyle(accent, 1); g.fillCircle(38, 5, 6.5);
+      g.fillStyle(0xffffff, 0.6); g.fillCircle(35.5, 2.5, 2.4);
       break;
     case 'crown':
       g.fillStyle(OUTLINE, 1);
-      g.fillTriangle(14, 30, 26, 30, 20, 6);
-      g.fillTriangle(30, 30, 46, 30, 38, 2);
-      g.fillTriangle(50, 30, 62, 30, 56, 6);
+      g.fillPoints([{ x: 16, y: 26 }, { x: 21, y: 8 }, { x: 28, y: 22 }, { x: 38, y: 4 }, { x: 48, y: 22 }, { x: 55, y: 8 }, { x: 60, y: 26 }], true);
       g.fillStyle(0xffd23e, 1);
-      g.fillTriangle(17, 28, 25, 28, 21, 11);
-      g.fillTriangle(33, 28, 45, 28, 39, 8);
-      g.fillTriangle(51, 28, 59, 28, 55, 11);
+      g.fillPoints([{ x: 19, y: 24 }, { x: 22.5, y: 12 }, { x: 28.5, y: 23 }, { x: 38, y: 8 }, { x: 47.5, y: 23 }, { x: 53.5, y: 12 }, { x: 57, y: 24 }], true);
       break;
-  }
-}
-
-// ---------- cosméticos ----------
-// Mesmas coordenadas do boneco (76×104) usadas no SVG das telas, para o
-// personagem ficar idêntico dentro e fora das partidas.
-function drawHat(g, hat) {
-  switch (hat) {
-    case 'cap':
-      g.fillStyle(OUTLINE, 1); g.fillRoundedRect(11, 8, 54, 18, 9);
-      g.fillStyle(0xe8483f, 1); g.fillRoundedRect(13, 10, 50, 14, 7);
-      g.fillStyle(0x9c2820, 1); g.fillRoundedRect(13, 20, 62, 7, 3.5);
-      break;
-    case 'party':
-      g.fillStyle(OUTLINE, 1); g.fillTriangle(38, -4, 20, 26, 56, 26);
-      g.fillStyle(0xffd23e, 1); g.fillTriangle(38, 1, 24, 24, 52, 24);
-      g.fillStyle(0xe8483f, 1); g.fillTriangle(38, 1, 30, 16, 44, 16);
-      g.fillStyle(0x3ddad7, 1); g.fillCircle(38, -2, 5);
-      break;
-    case 'top':
-      g.fillStyle(OUTLINE, 1); g.fillRoundedRect(8, 20, 60, 8, 4);
-      g.fillRoundedRect(20, -6, 36, 28, 4);
-      g.fillStyle(0x2a2358, 1); g.fillRoundedRect(22, -4, 32, 24, 3);
-      g.fillStyle(0xffd23e, 1); g.fillRect(22, 12, 32, 6);
-      break;
-    case 'horns':
-      g.fillStyle(OUTLINE, 1);
-      g.fillTriangle(16, 24, 26, 24, 12, 0);
-      g.fillTriangle(60, 24, 50, 24, 64, 0);
-      g.fillStyle(0xe8483f, 1);
-      g.fillTriangle(18, 22, 25, 22, 14, 4);
-      g.fillTriangle(58, 22, 51, 22, 62, 4);
-      break;
-    case 'halo':
-      g.fillStyle(0xffd23e, 1); g.fillEllipse(38, 6, 42, 14);
-      g.fillStyle(0x1c2440, 0); // recorte interno
-      g.fillStyle(0xfff3c4, 1); g.fillEllipse(38, 6, 28, 6);
-      break;
-    case 'crown':
-      g.fillStyle(OUTLINE, 1);
-      g.fillTriangle(14, 26, 26, 26, 20, 2);
-      g.fillTriangle(30, 26, 46, 26, 38, -4);
-      g.fillTriangle(50, 26, 62, 26, 56, 2);
-      g.fillRect(14, 20, 48, 8);
-      g.fillStyle(0xffd23e, 1);
-      g.fillTriangle(17, 24, 25, 24, 21, 7);
-      g.fillTriangle(33, 24, 45, 24, 39, 2);
-      g.fillTriangle(51, 24, 59, 24, 55, 7);
-      g.fillRect(16, 21, 44, 5);
-      break;
-  }
-}
-
-// Devolve true se o rosto foi desenhado por completo (dispensa o padrão).
-function drawFace(g, face, top) {
-  const ey = top + 24;
-  switch (face) {
-    case 'happy':
-      g.lineStyle(4, OUTLINE, 1);
-      g.beginPath(); g.arc(28, ey + 2, 8, Math.PI, 0, true); g.strokePath();
-      g.beginPath(); g.arc(48, ey + 2, 8, Math.PI, 0, true); g.strokePath();
-      return true;
-    case 'cool':
-      g.fillStyle(OUTLINE, 1); g.fillRoundedRect(14, ey - 9, 48, 17, 6);
-      g.fillStyle(0x2a2358, 1);
-      g.fillRoundedRect(17, ey - 6, 18, 11, 4);
-      g.fillRoundedRect(41, ey - 6, 18, 11, 4);
-      g.fillStyle(0xffffff, 0.4); g.fillRect(19, ey - 4, 6, 3);
-      return true;
-    case 'angry':
-      g.fillStyle(0xffffff, 1); g.fillCircle(28, ey, 8); g.fillCircle(48, ey, 8);
-      g.fillStyle(OUTLINE, 1); g.fillCircle(30, ey + 1, 4); g.fillCircle(50, ey + 1, 4);
-      g.fillStyle(OUTLINE, 1);
-      g.fillTriangle(18, ey - 13, 36, ey - 6, 18, ey - 6);
-      g.fillTriangle(58, ey - 13, 40, ey - 6, 58, ey - 6);
-      return true;
-    case 'wink':
-      g.fillStyle(0xffffff, 1); g.fillCircle(28, ey, 8);
-      g.fillStyle(OUTLINE, 1); g.fillCircle(30, ey + 1, 4);
-      g.lineStyle(4, OUTLINE, 1);
-      g.beginPath(); g.arc(48, ey + 2, 8, Math.PI, 0, true); g.strokePath();
-      return true;
-    case 'star':
-      g.fillStyle(0xffffff, 1); g.fillCircle(28, ey, 8); g.fillCircle(48, ey, 8);
-      g.fillStyle(0xffd23e, 1);
-      for (const cx of [28, 48]) {
-        g.fillTriangle(cx, ey - 7, cx - 6, ey + 5, cx + 6, ey + 5);
-        g.fillTriangle(cx, ey + 7, cx - 6, ey - 5, cx + 6, ey - 5);
-      }
-      return true;
-    default:
-      return false;
   }
 }
 
 function drawRunner(g, skin, cos) {
   g.clear();
+  // desloca o quadro de 76px para o centro da textura mais larga
+  g.translateCanvas(PAD, 0);
+  const pal = { body: skin.body, belly: skin.belly, accent: skin.accent, outline: OUTLINE };
+
+  // asas e pet ficam atrás do corpo
+  drawParts(g, backParts(cos), pal);
   drawFeature(g, skin);
 
-  roundRect(g, 10, BODY_TOP, 56, 74, 26, skin.body);
-
-  // barriga
-  g.fillStyle(skin.belly, 1);
-  g.fillRoundedRect(20, BODY_TOP + 34, 36, 32, 16);
+  // corpo com contorno + barriga
+  g.fillStyle(OUTLINE, 1); g.fillRoundedRect(9, 22, 58, 76, 27);
+  g.fillStyle(skin.body, 1); g.fillRoundedRect(11, 24, 54, 72, 25);
+  g.fillStyle(skin.belly, 1); g.fillRoundedRect(20, 58, 36, 32, 16);
 
   // rosto cosmético substitui o padrão quando existe
-  const customFace = cos && cos.face && cos.face !== 'none'
-    && drawFace(g, cos.face, BODY_TOP);
-
-  if (customFace) {
-    // já desenhado
+  const face = faceParts(cos);
+  if (face) {
+    drawParts(g, face, pal);
   } else if (skin.feature === 'visor') {
-    g.fillStyle(OUTLINE, 1);
-    g.fillRoundedRect(12, BODY_TOP + 14, 52, 22, 10);
-    g.fillStyle(skin.accent, 1);
-    g.fillRoundedRect(15, BODY_TOP + 17, 46, 16, 8);
-    g.fillStyle(0xffffff, 0.45);
-    g.fillRoundedRect(19, BODY_TOP + 20, 14, 6, 3);
+    g.fillStyle(OUTLINE, 1); g.fillRoundedRect(14, 34, 48, 20, 10);
+    g.fillStyle(skin.accent, 1); g.fillRoundedRect(17, 37, 42, 14, 7);
+    g.fillStyle(0xffffff, 0.45); g.fillRoundedRect(21, 39.5, 13, 5.5, 2.7);
   } else {
-    // olhos
-    g.fillStyle(0xffffff, 1);
-    g.fillCircle(28, BODY_TOP + 24, 9);
-    g.fillCircle(48, BODY_TOP + 24, 9);
-    g.fillStyle(OUTLINE, 1);
-    g.fillCircle(30, BODY_TOP + 25, 4.5);
-    g.fillCircle(50, BODY_TOP + 25, 4.5);
+    g.fillStyle(0xffffff, 1); g.fillCircle(28, 42, 8); g.fillCircle(48, 42, 8);
+    g.fillStyle(OUTLINE, 1); g.fillCircle(30, 43, 4); g.fillCircle(50, 43, 4);
   }
 
   // bochechas
-  g.fillStyle(0xffffff, 0.25);
-  g.fillCircle(22, BODY_TOP + 34, 4);
-  g.fillCircle(54, BODY_TOP + 34, 4);
+  g.fillStyle(0xffffff, 0.25); g.fillCircle(21, 52, 4); g.fillCircle(55, 52, 4);
 
-  // o chapéu vai por último, por cima de tudo
-  if (cos && cos.hat && cos.hat !== 'none') drawHat(g, cos.hat);
+  // roupa, óculos, cabelo e chapéu — nesta ordem, por cima de tudo
+  drawParts(g, frontParts(cos), pal);
+  g.translateCanvas(-PAD, 0);
 }
 
-// Gera sob demanda a versão do personagem pintada com a cor do slot.
+// Gera sob demanda a versão do personagem com a cor certa e os cosméticos.
 // Devolve a chave da textura, pronta para usar.
 // slot = número → pinta com a cor daquele slot (salas multiplayer)
-// slot = null   → mantém as cores originais da skin (treino solo)
+// slot = null   → cores da skin, ou a cor cosmética escolhida (treino solo)
 export function ensureRunnerTexture(scene, skinId, slot, cos) {
+  const solo = slot === null || slot === undefined;
   // a chave inclui os cosméticos: trocar de chapéu gera uma textura nova
-  const key = (slot === null || slot === undefined ? textureKey(skinId) : slotTextureKey(skinId, slot))
-    + (cos ? `-${cos.hat || 'none'}-${cos.face || 'none'}` : '');
+  const key = (solo ? textureKey(skinId) : slotTextureKey(skinId, slot))
+    + (cos ? '-' + cosKey(cos) : '');
   if (scene.textures.exists(key)) return key;
   const base = getSkin(skinId);
   let skin = base;
-  if (slot !== null && slot !== undefined) {
-    const color = SLOT_COLORS[slot % SLOT_COLORS.length];
+  const color = solo ? bodyColor(cos) : SLOT_COLORS[slot % SLOT_COLORS.length];
+  if (color !== null && color !== undefined) {
     skin = { ...base, body: color, belly: shade(color, 0.45), accent: shade(color, -0.35) };
   }
   const g = scene.make.graphics({ add: false });

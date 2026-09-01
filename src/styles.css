@@ -1398,3 +1398,57 @@ html, body {
   text-align: center;
   box-shadow: 0 8px 24px rgba(0,0,0,.5);
 }
+
+/* ================= telas com rolagem contida =================
+   A tela vira três faixas: topo fixo, área que rola sozinha, rodapé fixo.
+   overscroll-behavior: contain impede a rolagem de "vazar" para a página
+   e o iOS de puxar a tela inteira (efeito elástico) no fim da lista. */
+.screen.fixed {
+  height: 100%;
+  min-height: 0;
+  justify-content: flex-start;
+  gap: 10px;
+  overflow: hidden;
+}
+.screen.fixed .fixed-top { flex: none; }
+.screen.fixed .fixed-bottom { flex: none; width: min(348px, 92vw); padding-top: 2px; }
+.screen.fixed .fixed-bottom .btn { width: 100%; }
+.scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: min(348px, 92vw);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0 12px;
+  /* esmaece as bordas para mostrar que há mais conteúdo */
+  mask-image: linear-gradient(180deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 10px, #000 calc(100% - 14px), transparent 100%);
+}
+.scroll-area .skin-grid { width: 100%; }
+.scroll-area .hint { margin: 2px 0 0; }
+.scroll-area::-webkit-scrollbar { width: 0; height: 0; }
+
+/* faixa de abas que rola na horizontal sem barra visível */
+.tab-strip {
+  flex: none;
+  width: min(348px, 92vw);
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 2px;
+  scroll-snap-type: x proximity;
+}
+.tab-strip::-webkit-scrollbar { display: none; }
+.tab-strip .filter { flex: none; padding: 8px 13px; white-space: nowrap; scroll-snap-align: center; }
+
+/* pets e asas saem do quadro do boneco: os cards não podem cortar */
+.skin-card { overflow: visible; }
+.skin-card svg { overflow: visible; }

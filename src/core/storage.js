@@ -1,6 +1,8 @@
 // Progresso persistente no localStorage.
 // Tudo é opcional: se o navegador bloquear o storage (modo privado do Safari,
 // por exemplo), o jogo continua funcionando com os valores padrão em memória.
+import { SLOT_IDS } from './cosmetics.js';
+
 const KEY = 'ct-progress-v1';
 
 const DEFAULTS = {
@@ -12,8 +14,9 @@ const DEFAULTS = {
   races: 0,
   wins: 0,
   skin: 'azul',
-  hat: 'none',       // cosméticos equipados
-  face: 'none',
+  // cosméticos equipados, um por categoria (ver core/cosmetics.js)
+  color: 'none', hat: 'none', hair: 'none', glasses: 'none',
+  face: 'none', outfit: 'none', wings: 'none', pet: 'none',
   owned: [],         // ids de cosméticos comprados
   name: '',          // apelido; vazio = usa "Jogador N" do slot
   diff: 'normal',    // última dificuldade escolhida, reaproveitada na próxima sala
@@ -31,6 +34,13 @@ function read() {
     if (raw) Object.assign(cache, JSON.parse(raw));
   } catch (_) {
     // storage indisponível: segue com os padrões
+  }
+  // migração: o rosto "Descolado" virou o óculos "Escuros" — quem comprou
+  // ganha o item novo no lugar, sem perder as moedas
+  const owned = cache.owned || [];
+  if (owned.includes('cool') && !owned.includes('shades')) {
+    cache.owned = [...owned, 'shades'];
+    if (cache.face === 'cool') { cache.face = 'none'; cache.glasses = 'shades'; }
   }
   return cache;
 }
@@ -59,7 +69,7 @@ export function buyCosmetic(id, cost) {
 
 export function equipCosmetic(slot, id) {
   const p = read();
-  if (slot === 'hat' || slot === 'face') { p[slot] = id; write(); }
+  if (SLOT_IDS.includes(slot)) { p[slot] = id; write(); }
 }
 
 export function setSkin(id) {
