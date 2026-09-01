@@ -10,6 +10,7 @@ import { SKINS, isUnlocked } from '../games/runner/skins.js';
 import { openScanner } from './qrscan.js';
 import { charSVG, gameArt, levelInfo } from './art.js';
 import { SLOT_COLORS } from '../core/config.js';
+import { icon } from './icons.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
@@ -70,7 +71,7 @@ function roomRowsHtml(rooms, loadingRooms) {
     const full = r.players >= r.max;
     return `
       <div class="room-row ${full ? 'full' : ''}" data-code="${esc(r.code)}" style="border-left-color:${g.accent}">
-        <div class="rr-emoji">${g.emoji}</div>
+        <div class="rr-thumb">${gameArt(g)}</div>
         <div class="rr-body">
           <div class="rr-game">${esc(g.name)}</div>
           <div class="rr-host">👤 ${esc(r.host)}</div>
@@ -87,7 +88,7 @@ function roomRowsHtml(rooms, loadingRooms) {
       </div>`;
 }
 
-const playersLabel = (g) => `👥 ${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`}`;
+const playersLabel = (g) => `${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`} jogadores`;
 
 function gameCardHtml(g) {
   return `
@@ -103,10 +104,10 @@ function gameCardHtml(g) {
 function bottomNav(active, pending) {
   return `
     <div class="bottom-nav">
-      <button class="nav-item ${active === 'hub' ? 'on' : ''}" data-nav="hub"><span class="ni">🏠</span>HUB</button>
-      <button class="nav-item ${active === 'games' ? 'on' : ''}" data-nav="games"><span class="ni">🎮</span>JOGOS</button>
-      <button class="nav-item" data-nav="char"><span class="ni">👤</span>VOCÊ</button>
-      <button class="nav-item" data-nav="quests"><span class="ni">🏆</span>DESAFIOS${pending ? `<span class="badge">${pending}</span>` : ''}</button>
+      <button class="nav-item ${active === 'hub' ? 'on' : ''}" data-nav="hub"><span class="ni">${icon('house')}</span>HUB</button>
+      <button class="nav-item ${active === 'games' ? 'on' : ''}" data-nav="games"><span class="ni">${icon('gamepad')}</span>JOGOS</button>
+      <button class="nav-item" data-nav="char"><span class="ni">${icon('character')}</span>VOCÊ</button>
+      <button class="nav-item" data-nav="quests"><span class="ni">${icon('trophy')}</span>DESAFIOS${pending ? `<span class="badge">${pending}</span>` : ''}</button>
     </div>`;
 }
 
@@ -126,20 +127,20 @@ export function showHub(state, actions) {
       <div class="hero-podium"></div>
     </div>
 
-    <button class="btn-mega" data-a="play">🔥 JOGAR</button>
+    <button class="btn-mega" data-a="play">${icon('flame')} JOGAR</button>
 
     <div class="section-title"><span>JOGOS</span><button class="mini-btn" data-nav="games">ver todos</button></div>
     <div class="game-strip">${GAMES.map(gameCardHtml).join('')}</div>
 
-    <div class="section-title"><span>PARTIDAS ABERTAS</span><button class="mini-btn" data-a="refresh">↻</button></div>
+    <div class="section-title"><span>PARTIDAS ABERTAS</span><button class="mini-btn" data-a="refresh">${icon('cycle')}</button></div>
     <div class="room-list">${roomRowsHtml(rooms, loadingRooms)}</div>`;
 
   const gamesView = `
     <div class="hero-title" style="font-size:24px;margin-top:4px">ESCOLHA UM JOGO</div>
     <div class="game-grid">${GAMES.map(gameCardHtml).join('')}</div>
-    <div class="section-title"><span>PARTIDAS ABERTAS</span><button class="mini-btn" data-a="refresh">↻</button></div>
+    <div class="section-title"><span>PARTIDAS ABERTAS</span><button class="mini-btn" data-a="refresh">${icon('cycle')}</button></div>
     <div class="room-list">${roomRowsHtml(rooms, loadingRooms)}</div>
-    <button class="btn ghost" data-a="upgrades" style="margin-top:4px">⚡ OFICINA DE MELHORIAS</button>`;
+    <button class="btn ghost" data-a="upgrades" style="margin-top:4px">${icon('wrench')} OFICINA DE MELHORIAS</button>`;
 
   const node = el(`
     <div class="screen hub">
@@ -152,8 +153,8 @@ export function showHub(state, actions) {
             <span class="pp-lv"><span class="pp-lv-num">Nv ${lv.level}</span><span class="xp-bar"><span class="xp-fill" style="width:${lv.pct}%"></span></span></span>
           </span>
         </button>
-        <div class="coin-pill">🪙 ${nf(progress.coins)}</div>
-        <button class="icon-btn" data-a="settings">⚙️</button>
+        <div class="coin-pill">${icon('twoCoins')} ${nf(progress.coins)}</div>
+        <button class="icon-btn" data-a="settings">${icon('cog')}</button>
       </div>
 
       ${hubView === 'games' ? gamesView : homeView}
@@ -185,21 +186,21 @@ function showPlaySheet(state, actions) {
     <div class="sheet-back">
       <div class="sheet">
         <div class="sheet-grip"></div>
-        <h3>🎮 BORA JOGAR</h3>
+        <h3>${icon('gamepad')} BORA JOGAR</h3>
         <button class="sheet-opt" data-a="create">
-          <span class="so-ico">✨</span>
+          <span class="so-ico" style="color:#ffd23e">${icon('sparkles')}</span>
           <span><span class="so-t">Criar partida</span><br><span class="so-s">Você escolhe o jogo e chama os amigos</span></span>
         </button>
         <button class="sheet-opt" data-a="rooms">
-          <span class="so-ico">🌎</span>
+          <span class="so-ico" style="color:#4db6ff">${icon('earthAfricaEurope')}</span>
           <span><span class="so-t">Partidas abertas</span><br><span class="so-s">${state.rooms.length ? state.rooms.length + ' sala(s) esperando gente' : 'Ver a lista de salas públicas'}</span></span>
         </button>
         <button class="sheet-opt" data-a="code">
-          <span class="so-ico">🔑</span>
+          <span class="so-ico" style="color:#ffd23e">${icon('key')}</span>
           <span><span class="so-t">Entrar com código</span><br><span class="so-s">Seu amigo te passou um código de 5 letras</span></span>
         </button>
         <button class="sheet-opt" data-a="scan">
-          <span class="so-ico">📷</span>
+          <span class="so-ico" style="color:#43d68c">${icon('photoCamera')}</span>
           <span><span class="so-t">Escanear QR Code</span><br><span class="so-s">Aponte a câmera para o convite</span></span>
         </button>
       </div>
@@ -238,15 +239,15 @@ export function showUpgrades(state, actions) {
         ${pips(pu.level)}
       </div>
       ${pu.cost !== null
-        ? `<button class="up-buy ${progress.coins >= pu.cost ? '' : 'poor'}" data-pu="${pu.id}">🪙 ${nf(pu.cost)}</button>`
+        ? `<button class="up-buy ${progress.coins >= pu.cost ? '' : 'poor'}" data-pu="${pu.id}">${icon('twoCoins')} ${nf(pu.cost)}</button>`
         : '<div class="up-max">MÁX</div>'}
     </div>`).join('');
 
   const node = el(`
     <div class="screen">
       ${sceneDeco()}
-      <h2>⚡ OFICINA</h2>
-      <div class="coin-bar">🪙 ${nf(progress.coins)} <span class="dim">para gastar</span></div>
+      <h2>${icon('wrench')} OFICINA</h2>
+      <div class="coin-bar">${icon('twoCoins')} ${nf(progress.coins)} <span class="dim">para gastar</span></div>
       <p class="hint">Os itens aparecem na pista durante a corrida. Melhore cada um para render mais quando você pegar.</p>
       <div class="up-list">${cards}</div>
       <button class="btn ghost" data-a="back">VOLTAR</button>
@@ -271,7 +272,7 @@ export function showGameDetail(gameId, actions) {
           <div class="gc-meta">${playersLabel(g)} jogadores</div>
         </div>
       </div>
-      <button class="btn green" data-a="create">✨ CRIAR PARTIDA</button>
+      <button class="btn green" data-a="create">${icon('sparkles')} CRIAR PARTIDA</button>
       ${g.minPlayers <= 1 ? '<button class="btn ghost" data-a="solo">🏃 TREINAR SOZINHO</button>' : ''}
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
@@ -306,7 +307,7 @@ export function showCreate(form, actions) {
   const node = el(`
     <div class="screen">
       ${sceneDeco()}
-      <h2>🎮 NOVA PARTIDA</h2>
+      <h2>${icon('gamepad')} NOVA PARTIDA</h2>
 
       <div class="form-block">
         <div class="form-label">ESCOLHA SEU JOGO</div>
@@ -323,10 +324,10 @@ export function showCreate(form, actions) {
         <div class="form-label">Tipo de sala</div>
         <div class="chip-row">
           <button class="chip ${form.visibility === 'public' ? 'on' : ''}" data-vis="public">
-            <span class="ch-e">🌎</span><span class="ch-l">Pública</span>
+            <span class="ch-e" style="color:#4db6ff">${icon('earthAfricaEurope')}</span><span class="ch-l">Pública</span>
           </button>
           <button class="chip ${form.visibility === 'private' ? 'on' : ''}" data-vis="private">
-            <span class="ch-e">🔒</span><span class="ch-l">Privada</span>
+            <span class="ch-e" style="color:#ffd23e">${icon('padlock')}</span><span class="ch-l">Privada</span>
           </button>
         </div>
         <div class="form-note">${form.visibility === 'public'
@@ -344,7 +345,7 @@ export function showCreate(form, actions) {
 
       ${settingsBlocks}
 
-      <button class="btn-mega" data-a="go" style="font-size:19px">✨ CRIAR PARTIDA</button>
+      <button class="btn-mega" data-a="go" style="font-size:19px">${icon('sparkles')} CRIAR PARTIDA</button>
       <button class="btn ghost" data-a="back">VOLTAR</button>
     </div>
   `);
@@ -420,8 +421,8 @@ export function showLobby(state, actions) {
     slots.push(`
       <div class="stage-slot" style="animation-delay:${i * 0.08}s">
         <div class="stage-char" style="animation-delay:${i * 0.4}s">${charSVG(p.skin || 'azul', { size: 62, tint: SLOT_COLORS[i % SLOT_COLORS.length] })}</div>
-        <div class="stage-name" style="color:${slotHex(i)}">${p.isHost ? '👑 ' : ''}${esc(p.name)}${p.isYou ? ' ⭐' : ''}</div>
-        <div class="stage-stat ${p.ready ? 'ok' : ''}">${p.ready ? '✓ PRONTO' : 'esperando…'}</div>
+        <div class="stage-name" style="color:${slotHex(i)}">${p.isHost ? icon('crown', 'gi-gold') + ' ' : ''}${esc(p.name)}${p.isYou ? ' ' + icon('roundStar', 'gi-gold') : ''}</div>
+        <div class="stage-stat ${p.ready ? 'ok' : ''}">${p.ready ? icon('checkMark') + ' PRONTO' : 'esperando…'}</div>
       </div>`);
   }
 
@@ -458,9 +459,9 @@ export function showLobby(state, actions) {
     <div class="screen">
       ${sceneDeco()}
       <div class="lobby-head">
-        <span class="lh-emoji">${g.emoji}</span>
+        <div class="lh-art">${gameArt(g)}</div>
         <h2>${esc(g.name)}</h2>
-        <div class="lh-tag">${room.visibility === 'public' ? '🌎 Sala pública' : '🔒 Sala privada'} · ${players.length}/${room.maxPlayers}</div>
+        <div class="lh-tag">${room.visibility === 'public' ? icon('earthAfricaEurope') + ' Sala pública' : icon('padlock') + ' Sala privada'} · ${players.length}/${room.maxPlayers}</div>
       </div>
 
       <div class="stage">${slots}</div>
@@ -527,7 +528,7 @@ export function showResult(res, actions) {
       <div class="result-card">
         ${rows}
         ${records}
-        ${res.earned ? `<div class="coin-bar" style="justify-content:center">+🪙 ${nf(res.earned)}</div>` : ''}
+        ${res.earned ? `<div class="coin-bar" style="justify-content:center">+${icon('twoCoins')} ${nf(res.earned)}</div>` : ''}
         ${res.note ? `<p class="hint" style="max-width:none">${esc(res.note)}</p>` : ''}
       </div>
       ${res.canRematch ? `<button class="btn-mega" data-a="again" style="font-size:19px">${res.isHost ? '🔄 JOGAR NOVAMENTE' : '🔄 QUERO REVANCHE'}</button>` : ''}
@@ -558,10 +559,10 @@ export function showQuests(q, tab, actions) {
         <div class="q-sub">${nf(m.progress)} / ${nf(m.goal)}</div>
       </div>
       ${m.claimed
-        ? '<div class="q-ok">✓</div>'
+        ? `<div class="q-ok">${icon('checkMark')}</div>`
         : m.done
-          ? `<button class="q-claim" data-claim="${m.id}">🪙 ${m.reward}</button>`
-          : `<div class="q-prize">🪙 ${m.reward}</div>`}
+          ? `<button class="q-claim" data-claim="${m.id}">${icon('twoCoins')} ${m.reward}</button>`
+          : `<div class="q-prize">${icon('twoCoins')} ${m.reward}</div>`}
     </div>`;
 
   const achRow = (a) => `
@@ -572,7 +573,7 @@ export function showQuests(q, tab, actions) {
         <div class="q-sub">${esc(a.desc)}</div>
         ${a.done ? '' : bar(a.progress, a.goal)}
       </div>
-      ${a.done ? '<div class="q-ok">✓</div>' : `<div class="q-prize">🪙 ${a.reward}</div>`}
+      ${a.done ? `<div class="q-ok">${icon('checkMark')}</div>` : `<div class="q-prize">${icon('twoCoins')} ${a.reward}</div>`}
     </div>`;
 
   const lists = {
@@ -585,15 +586,15 @@ export function showQuests(q, tab, actions) {
   const node = el(`
     <div class="screen hub" style="padding-bottom:calc(24px + var(--safe-bottom))">
       ${sceneDeco()}
-      <h2>🏆 DESAFIOS</h2>
+      <h2>${icon('trophy', 'gi-gold')} DESAFIOS</h2>
       <div class="q-stats">
-        <span>🏅 ${doneAch}/${q.achievements.length} conquistas</span>
-        <span>📅 ${q.daysPlayed} ${q.daysPlayed === 1 ? 'dia' : 'dias'}</span>
+        <span>${icon('medal')} ${doneAch}/${q.achievements.length} conquistas</span>
+        <span>${icon('archeryTarget')} ${q.daysPlayed} ${q.daysPlayed === 1 ? 'dia' : 'dias'}</span>
       </div>
       <div class="filters">
-        <button class="filter ${tab === 'daily' ? 'on' : ''}" data-tab="daily">🔥 Diários</button>
-        <button class="filter ${tab === 'general' ? 'on' : ''}" data-tab="general">⭐ Gerais</button>
-        <button class="filter ${tab === 'ach' ? 'on' : ''}" data-tab="ach">🏅 Conquistas</button>
+        <button class="filter ${tab === 'daily' ? 'on' : ''}" data-tab="daily">${icon('flame')} Diários</button>
+        <button class="filter ${tab === 'general' ? 'on' : ''}" data-tab="general">${icon('roundStar')} Gerais</button>
+        <button class="filter ${tab === 'ach' ? 'on' : ''}" data-tab="ach">${icon('medal')} Conquistas</button>
       </div>
       ${tab === 'daily' ? '<p class="hint">Trocam todo dia à meia-noite.</p>' : ''}
       <div class="q-list">${lists[tab]}</div>
@@ -646,7 +647,7 @@ export function showSkins(progress, preview, actions) {
         <div class="hero-char">${charSVG(progress.skin, { size: 128 })}</div>
         <div class="hero-podium"></div>
         <h2>${esc(current.name).toUpperCase()}</h2>
-        <div class="coin-bar">🪙 ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
+        <div class="coin-bar">${icon('twoCoins')} ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
       </div>
       <div class="equip-row">
         <div class="equip-slot"><span class="es-i">🎩</span><span class="es-t">CABEÇA</span><span class="es-s">em breve</span></div>

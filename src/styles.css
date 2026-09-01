@@ -69,6 +69,27 @@ html, body {
 }
 
 .hidden { display: none !important; }
+
+/* ícones de interface (game-icons.net, inline, cor via currentColor) */
+.gi {
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  vertical-align: -0.12em;
+  flex-shrink: 0;
+}
+.gi-gold { color: var(--gold); }
+.coin-pill .gi, .coin-bar .gi, .q-prize .gi, .q-claim .gi, .up-buy .gi { color: var(--gold); font-size: 1.05em; }
+.q-claim .gi, .up-buy .gi { color: #fff; }
+.nav-item .ni .gi { width: 20px; height: 20px; }
+.so-ico .gi { width: 25px; height: 25px; }
+.ch-e .gi { width: 19px; height: 19px; }
+.icon-btn .gi { width: 18px; height: 18px; vertical-align: middle; }
+.mini-btn .gi { width: 14px; height: 14px; }
+.btn-mega .gi { width: .95em; height: .95em; color: #b8531a; }
+.stage-stat .gi { width: .95em; height: .95em; color: var(--green); }
+.q-ok .gi { color: var(--green); }
+.lh-tag .gi { color: var(--muted); }
 .dim { color: var(--muted); font-size: 12px; font-weight: 500; }
 
 /* ================= telas ================= */
@@ -393,6 +414,16 @@ html, body {
 }
 .room-row.full { opacity: .55; cursor: default; }
 .rr-emoji { font-size: 25px; }
+/* mini-arte do jogo na linha da sala */
+.rr-thumb {
+  width: 54px;
+  border-radius: 9px;
+  overflow: hidden;
+  flex-shrink: 0;
+  line-height: 0;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+}
+.rr-thumb .game-art { width: 100%; height: auto; display: block; }
 .rr-body { flex: 1; min-width: 0; }
 .rr-game { font-size: 14.5px; font-weight: 700; }
 .rr-host { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -598,8 +629,16 @@ html, body {
 }
 
 /* ================= sala / lobby ================= */
-.lobby-head { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.lobby-head { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .lh-emoji { font-size: 32px; }
+.lh-art {
+  width: 130px;
+  border-radius: 14px;
+  overflow: hidden;
+  line-height: 0;
+  box-shadow: 0 6px 18px rgba(0,0,0,.4), inset 0 0 0 1.5px rgba(255,255,255,.12);
+}
+.lh-art .game-art { width: 100%; height: auto; display: block; }
 .lh-tag { font-size: 12px; color: var(--muted); font-weight: 600; }
 
 .room-card {
