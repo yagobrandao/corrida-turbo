@@ -76,6 +76,28 @@ export const GAMES = [
     load: () => import('./flappy/FlappyGame.js'),
   },
   {
+    id: 'bomb',
+    name: 'Bomb Arena',
+    emoji: '💣',
+    tagline: 'Elimine seus amigos antes que eles eliminem você',
+    description: 'Arena vista de cima: plante bombas, exploda caixotes, pegue melhorias e seja o último de pé. Joystick na esquerda, bomba na direita. Se a rodada demorar, a arena fecha em lava.',
+    category: 'arcade',
+    minPlayers: 1,     // treino solo; com amigos é 2-4
+    maxPlayers: 4,
+    accent: '#e8483f',
+    settings: [{
+      id: 'rounds',
+      label: 'Rodadas',
+      default: '3',
+      choices: [
+        { id: '1', label: '1', emoji: '⚡', desc: 'Mata-mata único' },
+        { id: '3', label: '3', emoji: '🎯', desc: 'Melhor de três' },
+        { id: '5', label: '5', emoji: '🏆', desc: 'Série longa' },
+      ],
+    }],
+    load: () => import('./bomb/BombGame.js'),
+  },
+  {
     id: 'guess',
     name: 'Adivinhe',
     emoji: '🔥',

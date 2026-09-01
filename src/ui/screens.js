@@ -506,6 +506,13 @@ const HOWTO = {
     ['🟩', 'Atravesse os canos', 'cada um vale um ponto'],
     ['💥', 'Uma batida', 'e sua rodada acaba'],
   ],
+  bomb: [
+    ['🕹️', 'Arraste na esquerda', 'joystick para andar'],
+    ['💣', 'Botão da direita', 'planta uma bomba'],
+    ['💥', 'Explosão em cruz', 'quebra caixotes e elimina rivais'],
+    ['🎁', 'Caixotes escondem itens', 'alcance, bombas, velocidade, escudo'],
+    ['☠️', 'Rodada demorando?', 'a arena fecha em lava'],
+  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],

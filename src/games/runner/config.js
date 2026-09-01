@@ -9,10 +9,10 @@ export const PX_PER_M = 6.5;          // escala mundo->tela
 // com a velocidade esperada (ver track.js), então o tempo de reação se
 // mantém — o que muda é a sensação de velocidade.
 export const SPEED_START = 21;     //  76 km/h
-export const SPEED_MAX = 167;      // 600 km/h
+export const SPEED_MAX = 334;      // 1200 km/h
 export const SPEED_RAMP_UNTIL = 42;
 export const SPEED_ACCEL_EARLY = 1.6;  // rampa inicial: engrena em ~15s
-export const SPEED_ACCEL_LATE = 1.1;   // depois sobe ~4 km/h por segundo
+export const SPEED_ACCEL_LATE = 1.4;   // depois sobe ~5 km/h por segundo
 
 // Compressão visual: em vez de rolar a tela proporcionalmente à velocidade
 // (a 600 km/h seria um borrão de 1000 px por frame), a escala px/metro

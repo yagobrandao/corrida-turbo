@@ -97,7 +97,7 @@ export class Track {
   // (v² ≈ v0² + 2·a·d) de forma determinística: só depende da distância,
   // nunca do relógio, então os dois aparelhos calculam o mesmo valor.
   expectedSpeed(d) {
-    return Math.min(167, Math.sqrt(21 * 21 + 2 * 1.15 * d));
+    return Math.min(334, Math.sqrt(21 * 21 + 2 * 1.4 * d));
   }
 
   // Sorteia a faixa livre respeitando a distância até o padrão anterior.
