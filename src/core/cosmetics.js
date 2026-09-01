@@ -27,15 +27,18 @@ const COLORWAYS = [
 ];
 
 // Expande [desenho] → [original, ...variações]. `cw: false` = só a original.
+// `cw: null` marca a versão original de cada desenho (usada pelo filtro de
+// cor da vitrine — ver showSkins em ui/screens.js); `cwName` é o rótulo do
+// filtro ("Rubi", "Original"...).
 function expand(designs, cwList = COLORWAYS) {
   const out = [];
   for (const d of designs) {
     const sub = (cw) => (d.parts || []).map(sh => ({ ...sh, c: typeof sh.c === 'string' && cw[sh.c] !== undefined ? cw[sh.c] : sh.c }));
     const own = { p: d.p ?? 0x888888, q: d.q ?? 0x555555, k: d.k ?? W };
-    out.push({ id: d.id, name: d.name, cost: d.cost, parts: d.parts ? sub(own) : null, body: d.body });
+    out.push({ id: d.id, name: d.name, cost: d.cost, parts: d.parts ? sub(own) : null, body: d.body, cw: null, cwName: 'Original' });
     if (d.cw === false || !d.parts) continue;
     for (const cw of cwList) {
-      out.push({ id: `${d.id}_${cw.id}`, name: `${d.name} ${cw.name}`, cost: Math.round(d.cost * cw.mult), parts: sub(cw), design: d.id });
+      out.push({ id: `${d.id}_${cw.id}`, name: `${d.name} ${cw.name}`, cost: Math.round(d.cost * cw.mult), parts: sub(cw), design: d.id, cw: cw.id, cwName: cw.name });
     }
   }
   return out;
@@ -474,6 +477,15 @@ export const SLOTS = [
 export const SLOT_IDS = SLOTS.map(s => s.id);
 export const listOf = (slot) => (SLOTS.find(s => s.id === slot) || SLOTS[0]).list;
 export const itemOf = (slot, id) => listOf(slot).find(i => i.id === id) || listOf(slot)[0];
+
+// Cores presentes numa categoria (para o filtro da vitrine): "Original"
+// primeiro, depois na ordem em que aparecem — mesma ordem para todas as
+// categorias porque todas usam a mesma paleta (COLORWAYS), exceto Rostos.
+export function colorwaysOf(slot) {
+  const seen = new Map();
+  for (const it of listOf(slot)) if (!seen.has(it.cw)) seen.set(it.cw, it.cwName);
+  return [...seen.entries()].map(([cw, name]) => ({ cw, name }));
+}
 
 export function ownsCosmetic(item, owned) {
   return !item || item.cost === 0 || (owned || []).includes(item.id);

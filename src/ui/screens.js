@@ -11,7 +11,7 @@ import { openScanner } from './qrscan.js';
 import { charSVG, gameArt, levelInfo } from './art.js';
 import { SLOT_COLORS } from '../core/config.js';
 import { icon } from './icons.js';
-import { SLOTS, listOf, ownsCosmetic, resolveCosmetics } from '../core/cosmetics.js';
+import { SLOTS, listOf, colorwaysOf, ownsCosmetic, resolveCosmetics } from '../core/cosmetics.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
@@ -634,10 +634,12 @@ export function showRewards({ unlocked, claimedNow }, onClose) {
 // Vitrine do personagem: aba "Personagem" (skins, destravadas por moedas
 // acumuladas) + uma aba por categoria de cosmético (compradas com moedas).
 // Cada card mostra o SEU boneco já vestindo a peça, para dar para imaginar.
-export function showSkins(progress, preview, actions, tab = 'skin') {
+export function showSkins(progress, preview, actions, tab = 'skin', filter = {}) {
   const current = SKINS.find(s => s.id === progress.skin) || SKINS[0];
   const cos = resolveCosmetics(progress);
   const owned = progress.owned || [];
+  const cwFilter = filter.cw !== undefined ? filter.cw : 'all';
+  const ownedOnly = !!filter.owned;
 
   const skinCards = SKINS.map(s => {
     const unlocked = isUnlocked(s, progress.totalCoins);
@@ -650,7 +652,16 @@ export function showSkins(progress, preview, actions, tab = 'skin') {
       </div>`;
   }).join('');
 
-  const cosCards = tab === 'skin' ? '' : listOf(tab).map(it => {
+  // Categorias com muitas peças (chapéus, roupas...) ganham um filtro por
+  // cor e um "só o que tenho" — sem isso a grade vira uma rolagem cega.
+  // "Personagem" e "Cores" não têm variação de cor: não mostram a faixa.
+  const filterable = tab !== 'skin' && tab !== 'color';
+  const cwOptions = filterable ? colorwaysOf(tab) : [];
+  const fullList = tab === 'skin' ? [] : listOf(tab);
+  const visibleList = fullList.filter(it =>
+    (cwFilter === 'all' || it.cw === cwFilter) && (!ownedOnly || ownsCosmetic(it, owned)));
+
+  const cosCards = tab === 'skin' ? '' : (visibleList.length ? visibleList.map(it => {
     const has = ownsCosmetic(it, owned);
     const sel = cos[tab] === it.id;
     return `
@@ -659,7 +670,7 @@ export function showSkins(progress, preview, actions, tab = 'skin') {
         <div class="sn">${esc(it.name)}</div>
         <div class="sc">${has ? (sel ? 'em uso' : 'disponível') : icon('twoCoins', 'gi-gold') + ' ' + nf(it.cost)}</div>
       </div>`;
-  }).join('');
+  }).join('') : `<p class="hint" style="grid-column:1/-1">Nenhuma peça com esse filtro ainda.</p>`);
 
   const hint = tab === 'skin'
     ? 'Nas salas, a cor vem da sua posição — o personagem define o formato.'
@@ -682,6 +693,12 @@ export function showSkins(progress, preview, actions, tab = 'skin') {
         <button class="filter ${tab === 'skin' ? 'on' : ''}" data-ctab="skin">Personagem</button>
         ${SLOTS.map(s => `<button class="filter ${tab === s.id ? 'on' : ''}" data-ctab="${s.id}">${s.name}</button>`).join('')}
       </div>
+      ${filterable ? `
+      <div class="tab-strip cw-strip">
+        <button class="filter sm ${cwFilter === 'all' ? 'on' : ''}" data-cw="all">Todas as cores</button>
+        ${cwOptions.map(c => `<button class="filter sm ${cwFilter === c.cw ? 'on' : ''}" data-cw="${c.cw === null ? '__none' : esc(c.cw)}">${esc(c.name)}</button>`).join('')}
+        <button class="filter sm owned-toggle ${ownedOnly ? 'on' : ''}" data-owned-toggle>${icon('checkMark')} Só o que tenho</button>
+      </div>` : ''}
       <div class="scroll-area">
         <div class="skin-grid">${tab === 'skin' ? skinCards : cosCards}</div>
         <p class="hint">${hint}</p>
@@ -692,9 +709,13 @@ export function showSkins(progress, preview, actions, tab = 'skin') {
     </div>
   `);
   bindAll(node, '[data-ctab]', (b) => actions.tab(b.dataset.ctab));
+  bindAll(node, '[data-cw]', (b) => actions.filterCw(b.dataset.cw === '__none' ? null : (b.dataset.cw === 'all' ? 'all' : b.dataset.cw)));
+  bind(node, '[data-owned-toggle]', () => actions.filterOwned(!ownedOnly));
   // a aba ativa fica visível mesmo com a faixa rolando na horizontal
-  const active = node.querySelector('.tab-strip .on');
-  if (active) requestAnimationFrame(() => active.scrollIntoView({ inline: 'center', block: 'nearest' }));
+  for (const strip of node.querySelectorAll('.tab-strip')) {
+    const active = strip.querySelector('.on');
+    if (active) requestAnimationFrame(() => active.scrollIntoView({ inline: 'center', block: 'nearest' }));
+  }
 
   node.querySelectorAll('[data-skin]').forEach(card => {
     card.addEventListener('click', () => {

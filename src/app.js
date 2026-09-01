@@ -594,11 +594,16 @@ function leaveRoom() {
 // Telas auxiliares
 // ------------------------------------------------------------------
 let cosTab = 'skin';
+// filtro da vitrine: cor (id da combinação, null = "Original", 'all' = todas)
+// e "só o que tenho" — zera a cor ao trocar de aba (a lista muda de peça)
+let cosFilter = { cw: 'all', owned: false };
 async function showSkinsScreen() {
   await ensurePhaser();
   phase = 'skins';
   ui.showSkins(store.getProgress(), (id) => phaser.textures.getBase64(textureKey(id)), {
-    tab: (t) => { cosTab = t; showSkinsScreen(); },
+    tab: (t) => { cosTab = t; cosFilter = { cw: 'all', owned: false }; showSkinsScreen(); },
+    filterCw: (cw) => { cosFilter = { ...cosFilter, cw }; sfx.click(); showSkinsScreen(); },
+    filterOwned: (owned) => { cosFilter = { ...cosFilter, owned }; sfx.click(); showSkinsScreen(); },
     pick: (id) => {
       store.setSkin(id);
       broadcastIdentity();
@@ -618,7 +623,7 @@ async function showSkinsScreen() {
       showSkinsScreen();
     },
     back: () => showHub(),
-  }, cosTab);
+  }, cosTab, cosFilter);
 }
 
 function showUpgrades() {
