@@ -1,7 +1,7 @@
 // Todas as texturas são geradas em runtime (nada de assets externos),
 // com um traço cartoon consistente: cores chapadas + contorno escuro + brilho.
 import { SKINS, getSkin, textureKey, slotTextureKey } from './skins.js';
-import { SLOT_COLORS } from '../core/config.js';
+import { SLOT_COLORS } from '../../core/config.js';
 
 const OUTLINE = 0x1c2440;
 
@@ -206,6 +206,16 @@ export function buildTextures(scene) {
   g.fillStyle(0xffd23e, 1);
   g.fillCircle(17, 17, 7);
   g.generateTexture('coin', 38, 38);
+
+  // ---------- bolha de power-up ----------
+  g.clear();
+  g.fillStyle(0x1c2440, 0.85);
+  g.fillCircle(26, 26, 25);
+  g.lineStyle(4, 0xffd23e, 1);
+  g.strokeCircle(26, 26, 23);
+  g.fillStyle(0xffffff, 0.18);
+  g.fillCircle(18, 16, 8);
+  g.generateTexture('pu-bubble', 52, 52);
 
   // ---------- partículas ----------
   g.clear();

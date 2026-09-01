@@ -1,15 +1,24 @@
-// Todas as telas DOM (menu, salas, lobby, skins, resultado) ficam aqui.
-// A lógica de fluxo mora no main.js: este módulo só renderiza e emite ações.
-import { sfx, unlockAudio, getPrefs, setSound, setMusic } from '../game/audio.js';
-import { SKINS, isUnlocked } from '../game/skins.js';
-import { DIFFICULTIES, getDifficulty, SLOT_COLORS } from '../core/config.js';
+// Telas da Central de Jogos.
+//
+// Este módulo NÃO conhece a lógica interna de nenhum jogo — ele lê os
+// manifestos em games/index.js e renderiza. Adicionar um jogo novo não exige
+// tocar em nada aqui.
+import { sfx, unlockAudio, getPrefs, setSound, setMusic } from '../core/audio.js';
+import { GAMES, CATEGORIES, getGame, gamesByCategory } from '../games/index.js';
+import { MAX_PLAYERS, slotHex, slotName } from '../core/config.js';
+import { SKINS, isUnlocked } from '../games/runner/skins.js';
 import { openScanner } from './qrscan.js';
 
 const root = document.getElementById('ui-root');
 const toastEl = document.getElementById('toast');
 let toastTimer = null;
 
-export function toast(msg, ms = 2600) {
+const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+// Apelidos e nomes de sala chegam pela rede: nunca injetar cru no HTML.
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESCAPES[c]);
+const nf = (n) => Number(n || 0).toLocaleString('pt-BR');
+
+export function toast(msg, ms = 2800) {
   toastEl.textContent = msg;
   toastEl.classList.remove('hidden');
   clearTimeout(toastTimer);
@@ -25,124 +34,239 @@ function el(html) {
 function show(node) {
   root.innerHTML = '';
   root.appendChild(node);
+  root.scrollTop = 0;
 }
 
 export function hideUI() { root.innerHTML = ''; }
 
-function bindBtn(node, sel, fn) {
+function bind(node, sel, fn) {
   const b = node.querySelector(sel);
   if (b) b.addEventListener('click', () => { unlockAudio(); sfx.click(); fn(b); });
   return b;
 }
+function bindAll(node, sel, fn) {
+  node.querySelectorAll(sel).forEach(e =>
+    e.addEventListener('click', () => { unlockAudio(); sfx.click(); fn(e); }));
+}
 
-const nf = (n) => Number(n || 0).toLocaleString('pt-BR');
+// ================================================================ CENTRAL
+// state: { progress, rooms, loadingRooms, filter }
+export function showHub(state, actions) {
+  const { progress, rooms, loadingRooms, filter } = state;
 
-// Apelidos chegam pela rede, escritos por outras pessoas: nunca injetar cru.
-const ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ESCAPES[c]);
-
-const slotColor = (slot) => '#' + SLOT_COLORS[slot % SLOT_COLORS.length].toString(16).padStart(6, '0');
-
-// ---------------------------------------------------------------- menu
-export function showMenu(progress, actions) {
-  const node = el(`
-    <div class="screen">
-      <div class="logo">CORRIDA<br>TURBO<small>DUELO INFINITO</small></div>
-      <div class="name-tag" data-a="name">
-        <span class="nt-label">você é</span>
-        <b>${esc(progress.name || 'Jogador')}</b>
-        <span class="nt-edit">✏️</span>
+  const cards = gamesByCategory(filter).map(g => `
+    <div class="game-card" data-game="${g.id}" style="--accent:${g.accent}">
+      <div class="gc-emoji">${g.emoji}</div>
+      <div class="gc-body">
+        <div class="gc-name">${esc(g.name)}</div>
+        <div class="gc-tag">${esc(g.tagline)}</div>
+        <div class="gc-meta">👥 ${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`} jogadores</div>
       </div>
-      <div class="coin-bar">🪙 ${nf(progress.coins)}<span style="color:var(--muted);font-size:12px;font-weight:700">
-        · recorde ${nf(progress.bestDist)} m</span></div>
-      <button class="btn" data-a="play">JOGAR</button>
-      <button class="btn ghost" data-a="solo">🏃 TREINO SOLO</button>
-      <button class="btn ghost" data-a="skins">🎭 PERSONAGENS</button>
-      <button class="btn ghost" data-a="howto">COMO JOGAR</button>
-      <button class="btn ghost" data-a="settings">CONFIGURAÇÕES</button>
-    </div>
-  `);
-  bindBtn(node, '[data-a=name]', () => showNameEditor(progress.name, actions.setName));
-  bindBtn(node, '[data-a=play]', actions.play);
-  bindBtn(node, '[data-a=solo]', actions.solo);
-  bindBtn(node, '[data-a=skins]', actions.skins);
-  bindBtn(node, '[data-a=howto]', showHowTo);
-  bindBtn(node, '[data-a=settings]', () => showSettings(actions.resetProgress));
-  show(node);
-}
+      <div class="gc-go">▶</div>
+    </div>`).join('');
 
-// ---------------------------------------------------------------- skins
-// `preview(id)` devolve um data-URL da textura já gerada pelo Phaser,
-// para a vitrine mostrar exatamente o boneco que vai entrar na pista.
-export function showSkins(progress, preview, actions) {
-  const cards = SKINS.map(s => {
-    const unlocked = isUnlocked(s, progress.totalCoins);
-    const sel = s.id === progress.skin;
+  const roomRows = rooms.length ? rooms.map(r => {
+    const g = getGame(r.game);
+    const full = r.players >= r.max;
     return `
-      <div class="skin-card ${sel ? 'on' : ''} ${unlocked ? '' : 'locked'}" data-skin="${s.id}">
-        <img src="${preview(s.id)}" alt="${s.name}" />
-        <div class="sn">${unlocked ? s.name : '🔒'}</div>
-        <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : '🪙 ' + nf(s.cost)}</div>
+      <div class="room-row ${full ? 'full' : ''}" data-code="${esc(r.code)}">
+        <div class="rr-emoji">${g.emoji}</div>
+        <div class="rr-body">
+          <div class="rr-game">${esc(g.name)}</div>
+          <div class="rr-host">👤 ${esc(r.host)}</div>
+        </div>
+        <div class="rr-side">
+          <div class="rr-count ${full ? 'cheia' : ''}">👥 ${r.players}/${r.max}</div>
+          <button class="rr-btn" ${full ? 'disabled' : ''}>${full ? 'CHEIA' : 'ENTRAR'}</button>
+        </div>
       </div>`;
-  }).join('');
+  }).join('') : `
+      <div class="empty-rooms">
+        ${loadingRooms ? '<span class="waiting-dots">Procurando salas</span>'
+                       : 'Nenhuma sala pública aberta agora.<br><small>Crie a sua ou entre por código.</small>'}
+      </div>`;
 
   const node = el(`
-    <div class="screen">
-      <h2>PERSONAGENS</h2>
-      <div class="coin-bar">🪙 ${nf(progress.totalCoins)} <span style="color:var(--muted);font-size:12px;font-weight:700">moedas no total</span></div>
-      <div class="skin-grid">${cards}</div>
-      <p class="hint">Junte moedas correndo para destravar novos personagens. O total acumulado nunca diminui.</p>
-      <button class="btn ghost" data-a="back">VOLTAR</button>
-    </div>
-  `);
+    <div class="screen hub">
+      <div class="hub-top">
+        <div class="logo-sm">🎮 PARTY HUB</div>
+        <div class="name-tag" data-a="name">
+          <b>${esc(progress.name || 'Jogador')}</b><span class="nt-edit">✏️</span>
+        </div>
+      </div>
 
-  node.querySelectorAll('.skin-card').forEach(card => {
-    card.addEventListener('click', () => {
-      const id = card.dataset.skin;
-      const skin = SKINS.find(s => s.id === id);
-      unlockAudio();
-      if (!isUnlocked(skin, progress.totalCoins)) {
-        toast(`Faltam ${nf(skin.cost - progress.totalCoins)} moedas para ${skin.name}`);
-        return;
-      }
-      sfx.powerup();
-      actions.pick(id);
-    });
-  });
-  bindBtn(node, '[data-a=back]', actions.back);
-  show(node);
-}
+      <div class="section-title">JOGOS</div>
+      <div class="filters">
+        ${CATEGORIES.map(c => `<button class="filter ${c.id === filter ? 'on' : ''}" data-cat="${c.id}">${c.name}</button>`).join('')}
+      </div>
+      <div class="game-list">${cards}</div>
 
-// ---------------------------------------------------------------- multiplayer
-export function showMultiplayer(actions) {
-  const node = el(`
-    <div class="screen">
-      <h2>MULTIPLAYER</h2>
-      <p class="hint">Até 5 jogadores na mesma corrida. Um cria a sala, os outros entram pelo código ou QR.</p>
+      <div class="section-title row-between">
+        <span>SALAS PÚBLICAS</span>
+        <button class="mini-btn" data-a="refresh">↻</button>
+      </div>
+      <div class="room-list">${roomRows}</div>
+
       <button class="btn green" data-a="create">CRIAR SALA</button>
-      <button class="btn orange" data-a="join">ENTRAR EM SALA</button>
-      <button class="btn ghost" data-a="back">VOLTAR</button>
+      <button class="btn orange" data-a="join">ENTRAR COM CÓDIGO</button>
+      <div class="hub-foot">
+        <button class="mini-link" data-a="skins">🎭 Personagens</button>
+        <button class="mini-link" data-a="upgrades">🧪 Melhorias</button>
+        <button class="mini-link" data-a="settings">⚙️ Ajustes</button>
+      </div>
     </div>
   `);
-  bindBtn(node, '[data-a=create]', actions.create);
-  bindBtn(node, '[data-a=join]', actions.join);
-  bindBtn(node, '[data-a=back]', actions.back);
+
+  bindAll(node, '.filter', (b) => actions.filter(b.dataset.cat));
+  bindAll(node, '.game-card', (c) => actions.pickGame(c.dataset.game));
+  bindAll(node, '.room-row:not(.full)', (r) => actions.joinCode(r.dataset.code));
+  bind(node, '[data-a=refresh]', actions.refresh);
+  bind(node, '[data-a=create]', () => actions.create(null));
+  bind(node, '[data-a=join]', actions.join);
+  bind(node, '[data-a=name]', () => showNameEditor(progress.name, actions.setName));
+  bind(node, '[data-a=skins]', actions.skins);
+  bind(node, '[data-a=upgrades]', actions.upgrades);
+  bind(node, '[data-a=settings]', () => showSettings(actions.resetProgress));
   show(node);
 }
 
-export function showConnecting(text = 'Conectando') {
-  show(el(`<div class="screen"><h2 class="waiting-dots">${text}</h2></div>`));
+// ================================================================ MELHORIAS
+// state: { progress, powerups: [{id,emoji,name,desc,kind,level,value,nextValue,cost}] }
+export function showUpgrades(state, actions) {
+  const { progress, powerups } = state;
+  const fmt = (pu, v) => pu.kind === 'timed' ? `${v.toFixed(1)}s` : `${Math.round(v)}${pu.id === 'vida' ? ' vida' : ''}`;
+  const cards = powerups.map(pu => `
+    <div class="up-card">
+      <div class="up-emoji">${pu.emoji}</div>
+      <div class="up-body">
+        <div class="up-name">${esc(pu.name)} <span class="up-lv">nv ${pu.level}</span></div>
+        <div class="up-desc">${esc(pu.desc)}</div>
+        <div class="up-val">${fmt(pu, pu.value)}${pu.nextValue !== null && pu.nextValue !== pu.value ? ` → <b>${fmt(pu, pu.nextValue)}</b>` : ''}</div>
+      </div>
+      ${pu.cost !== null
+        ? `<button class="up-buy ${progress.coins >= pu.cost ? '' : 'poor'}" data-pu="${pu.id}">🪙 ${nf(pu.cost)}</button>`
+        : '<div class="up-max">MÁX</div>'}
+    </div>`).join('');
+
+  const node = el(`
+    <div class="screen">
+      <h2>MELHORIAS</h2>
+      <div class="coin-bar">🪙 ${nf(progress.coins)} <span class="dim">para gastar</span></div>
+      <p class="hint">Os itens aparecem na pista durante a corrida. Melhore cada um para ele durar mais (ou render mais) quando você pegar.</p>
+      <div class="up-list">${cards}</div>
+      <button class="btn ghost" data-a="back">VOLTAR</button>
+    </div>
+  `);
+  bindAll(node, '.up-buy', (b) => actions.buy(b.dataset.pu));
+  bind(node, '[data-a=back]', actions.back);
+  show(node);
 }
 
-// ---------------------------------------------------------------- entrar
+// ================================================================ DETALHE DO JOGO
+export function showGameDetail(gameId, actions) {
+  const g = getGame(gameId);
+  const node = el(`
+    <div class="screen">
+      <div class="detail-hero" style="--accent:${g.accent}">
+        <div class="dh-emoji">${g.emoji}</div>
+        <h2>${esc(g.name)}</h2>
+        <p class="hint">${esc(g.description)}</p>
+        <div class="gc-meta">👥 ${g.minPlayers === g.maxPlayers ? g.maxPlayers : `${g.minPlayers}–${g.maxPlayers}`} jogadores</div>
+      </div>
+      <button class="btn green" data-a="create">CRIAR SALA</button>
+      ${g.minPlayers <= 1 ? '<button class="btn ghost" data-a="solo">🏃 TREINAR SOZINHO</button>' : ''}
+      <button class="btn ghost" data-a="back">VOLTAR</button>
+    </div>
+  `);
+  bind(node, '[data-a=create]', () => actions.create(gameId));
+  bind(node, '[data-a=solo]', () => actions.solo(gameId));
+  bind(node, '[data-a=back]', actions.back);
+  show(node);
+}
+
+// ================================================================ CRIAR SALA
+// form: { gameId, visibility, maxPlayers, settings }
+export function showCreate(form, actions) {
+  const g = getGame(form.gameId);
+  const min = Math.max(2, g.minPlayers);
+  const cap = Math.min(g.maxPlayers, MAX_PLAYERS);
+  const counts = [];
+  for (let n = min; n <= cap; n++) counts.push(n);
+
+  const settingsBlocks = (g.settings || []).map(s => `
+    <div class="form-block">
+      <div class="form-label">${esc(s.label)}</div>
+      <div class="chip-row">
+        ${s.choices.map(c => `
+          <button class="chip ${form.settings[s.id] === c.id ? 'on' : ''}" data-set="${s.id}" data-val="${c.id}">
+            <span class="ch-e">${c.emoji}</span><span class="ch-l">${esc(c.label)}</span>
+          </button>`).join('')}
+      </div>
+      <div class="form-note">${esc((s.choices.find(c => c.id === form.settings[s.id]) || {}).desc || '')}</div>
+    </div>`).join('');
+
+  const node = el(`
+    <div class="screen">
+      <h2>CRIAR SALA</h2>
+
+      <div class="form-block">
+        <div class="form-label">Jogo</div>
+        <div class="game-picker">
+          ${GAMES.map(x => `
+            <button class="gp ${x.id === form.gameId ? 'on' : ''}" data-game="${x.id}" style="--accent:${x.accent}">
+              <span class="gp-e">${x.emoji}</span><span class="gp-n">${esc(x.name)}</span>
+            </button>`).join('')}
+        </div>
+      </div>
+
+      <div class="form-block">
+        <div class="form-label">Tipo de sala</div>
+        <div class="chip-row">
+          <button class="chip ${form.visibility === 'public' ? 'on' : ''}" data-vis="public">
+            <span class="ch-e">🌎</span><span class="ch-l">Pública</span>
+          </button>
+          <button class="chip ${form.visibility === 'private' ? 'on' : ''}" data-vis="private">
+            <span class="ch-e">🔒</span><span class="ch-l">Privada</span>
+          </button>
+        </div>
+        <div class="form-note">${form.visibility === 'public'
+          ? 'Aparece na lista para qualquer pessoa entrar.'
+          : 'Só entra quem tiver o código ou o QR Code.'}</div>
+      </div>
+
+      <div class="form-block">
+        <div class="form-label">Jogadores</div>
+        <div class="chip-row">
+          ${counts.map(n => `<button class="chip ${form.maxPlayers === n ? 'on' : ''}" data-count="${n}"><span class="ch-l">${n}</span></button>`).join('')}
+        </div>
+        ${min === cap ? `<div class="form-note">${esc(g.name)} é para ${cap} jogadores.</div>` : ''}
+      </div>
+
+      ${settingsBlocks}
+
+      <button class="btn green" data-a="go">CRIAR SALA</button>
+      <button class="btn ghost" data-a="back">VOLTAR</button>
+    </div>
+  `);
+
+  bindAll(node, '.gp', (b) => actions.change({ gameId: b.dataset.game }));
+  bindAll(node, '[data-vis]', (b) => actions.change({ visibility: b.dataset.vis }));
+  bindAll(node, '[data-count]', (b) => actions.change({ maxPlayers: +b.dataset.count }));
+  bindAll(node, '[data-set]', (b) => actions.change({ setting: [b.dataset.set, b.dataset.val] }));
+  bind(node, '[data-a=go]', actions.submit);
+  bind(node, '[data-a=back]', actions.back);
+  show(node);
+}
+
+// ================================================================ ENTRAR
 export function showJoin(prefill, actions) {
   const node = el(`
     <div class="screen">
       <h2>ENTRAR NA SALA</h2>
-      <p class="hint">Digite o código da sala, ou aponte a câmera do celular para o QR Code do seu amigo.</p>
+      <p class="hint">Digite o código da sala, ou aponte a câmera para o QR Code do seu amigo.</p>
       <input class="code-input" maxlength="5" placeholder="•••••"
              autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false"
-             inputmode="text" value="${prefill || ''}" />
+             inputmode="text" value="${esc(prefill || '')}" />
       <button class="btn green" data-a="enter">ENTRAR</button>
       <button class="btn orange" data-a="scan">📷 ESCANEAR QR</button>
       <button class="btn ghost" data-a="back">VOLTAR</button>
@@ -157,67 +281,73 @@ export function showJoin(prefill, actions) {
     if (code.length < 4) { toast('Código muito curto'); return; }
     actions.enter(code);
   };
-  bindBtn(node, '[data-a=enter]', submit);
+  bind(node, '[data-a=enter]', submit);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
-  bindBtn(node, '[data-a=scan]', async () => {
+  bind(node, '[data-a=scan]', async () => {
     const code = await openScanner();
     if (!code) return;
     input.value = code;
     actions.enter(code);
   });
-  bindBtn(node, '[data-a=back]', actions.back);
+  bind(node, '[data-a=back]', actions.back);
   show(node);
-  if (!prefill) setTimeout(() => input.focus(), 100);
+  if (!prefill) setTimeout(() => input.focus(), 120);
 }
 
-// ---------------------------------------------------------------- lobby
-// Uma única tela serve host e convidado. O host vê o QR, o seletor de
-// dificuldade e o botão de largada; os convidados veem o mesmo estado em
-// modo leitura e só marcam PRONTO.
-//
-// state: { isHost, code, qr, link, maxPlayers, difficulty,
-//          players: [{ slot, name, skin, ready, isYou, isHost }] }
+export function showBusy(text = 'Conectando') {
+  show(el(`<div class="screen"><h2 class="waiting-dots">${esc(text)}</h2></div>`));
+}
+
+// ================================================================ LOBBY
+// state: { isHost, code, qr, link, room:{gameId,visibility,maxPlayers,settings}, players }
 export function showLobby(state, actions) {
-  const { isHost, code, qr, players, maxPlayers, difficulty } = state;
-  const diff = getDifficulty(difficulty);
+  const { isHost, code, qr, room, players } = state;
+  const g = getGame(room.gameId);
 
   const slots = [];
-  for (let i = 0; i < maxPlayers; i++) {
+  for (let i = 0; i < room.maxPlayers; i++) {
     const p = players.find(x => x.slot === i);
     if (!p) {
       slots.push(`
-        <div class="player-slot empty">
-          <div class="pdot" style="background:${slotColor(i)};opacity:.35"></div>
+        <div class="pslot empty">
+          <div class="pdot" style="background:${slotHex(i)};opacity:.3"></div>
           <div class="pname">Vago</div>
-          <div class="pstatus">aguardando</div>
+          <div class="pstat">aguardando</div>
         </div>`);
       continue;
     }
-    const color = slotColor(i);
     slots.push(`
-      <div class="player-slot connected ${p.isYou ? 'you' : ''}" style="border-color:${color}">
-        <div class="pdot" style="background:${color}"></div>
-        <div class="pname">${esc(p.name)}${p.isYou ? ' (você)' : ''}</div>
-        <div class="pstatus ${p.ready ? 'ok' : ''}">${p.isHost ? 'HOST · ' : ''}${p.ready ? 'PRONTO' : 'esperando'}</div>
+      <div class="pslot ${p.isYou ? 'you' : ''}" style="border-color:${slotHex(i)}">
+        <div class="pdot" style="background:${slotHex(i)}"></div>
+        <div class="pname">${p.isHost ? '👑 ' : ''}${esc(p.name)}${p.isYou ? ' (você)' : ''}</div>
+        <div class="pstat ${p.ready ? 'ok' : ''}">${p.ready ? '✓ PRONTO' : 'esperando'}</div>
       </div>`);
   }
 
-  const diffBlock = isHost
-    ? `<div class="diff-grid">${DIFFICULTIES.map(d => `
-        <div class="diff-opt ${d.id === difficulty ? 'on' : ''}" data-diff="${d.id}">
-          <div class="de">${d.emoji}</div>
-          <div class="dn">${d.name}</div>
-          <div class="dd">${d.desc}</div>
-        </div>`).join('')}</div>`
-    : `<div class="diff-readonly">${diff.emoji} Dificuldade: ${diff.name}</div>`;
+  const settingsView = (g.settings || []).map(s => {
+    const cur = s.choices.find(c => c.id === room.settings[s.id]) || s.choices[0];
+    if (!isHost) return `<div class="set-readonly">${cur.emoji} ${esc(s.label)}: <b>${esc(cur.label)}</b></div>`;
+    return `
+      <div class="form-block">
+        <div class="form-label">${esc(s.label)}</div>
+        <div class="chip-row">
+          ${s.choices.map(c => `
+            <button class="chip ${room.settings[s.id] === c.id ? 'on' : ''}" data-set="${s.id}" data-val="${c.id}">
+              <span class="ch-e">${c.emoji}</span><span class="ch-l">${esc(c.label)}</span>
+            </button>`).join('')}
+        </div>
+      </div>`;
+  }).join('');
 
   const others = players.filter(p => !p.isYou);
-  const allReady = others.length > 0 && others.every(p => p.ready);
+  const readyCount = others.filter(p => p.ready).length;
   const me = players.find(p => p.isYou);
+  const enough = players.length >= Math.max(2, g.minPlayers);
 
-  const actionBtn = isHost
-    ? `<button class="btn green" data-a="start" ${others.length ? '' : 'disabled'}>
-         ${others.length ? (allReady ? 'INICIAR CORRIDA' : `INICIAR (${others.filter(p => p.ready).length}/${others.length} prontos)`) : 'AGUARDANDO JOGADORES…'}
+  const action = isHost
+    ? `<button class="btn green" data-a="start" ${enough ? '' : 'disabled'}>
+         ${!enough ? `PRECISA DE ${Math.max(2, g.minPlayers)} JOGADORES`
+                   : (readyCount === others.length ? 'INICIAR PARTIDA' : `INICIAR (${readyCount}/${others.length} prontos)`)}
        </button>`
     : `<button class="btn green" data-a="ready" ${me && me.ready ? 'disabled' : ''}>
          ${me && me.ready ? 'AGUARDANDO HOST…' : 'PRONTO!'}
@@ -225,81 +355,119 @@ export function showLobby(state, actions) {
 
   const node = el(`
     <div class="screen">
-      <h2>SALA ${code}</h2>
-      ${isHost && qr ? `
-        <div class="room-card">
-          <div class="room-code">${code}</div>
-          <img class="qr" src="${qr}" alt="QR Code da sala" />
-          <span class="copy-link" data-a="copy">copiar link de convite</span>
-        </div>` : '<p class="hint" style="color:var(--green);font-weight:800">✓ CONECTADO</p>'}
-      <div class="players">${slots.join('')}</div>
-      ${diffBlock}
-      ${actionBtn}
+      <div class="lobby-head" style="--accent:${g.accent}">
+        <span class="lh-emoji">${g.emoji}</span>
+        <h2>${esc(g.name)}</h2>
+        <div class="lh-tag">${room.visibility === 'public' ? '🌎 Sala pública' : '🔒 Sala privada'}</div>
+      </div>
+
+      <div class="room-card">
+        <div class="room-code">${esc(code)}</div>
+        ${qr ? `<img class="qr" src="${qr}" alt="QR Code da sala" />` : ''}
+        <span class="copy-link" data-a="copy">copiar link de convite</span>
+      </div>
+
+      <div class="pgrid">${slots}</div>
+      <div class="pcount">${players.length}/${room.maxPlayers}</div>
+
+      ${settingsView}
+      ${action}
       <button class="btn ghost" data-a="leave">SAIR DA SALA</button>
     </div>
   `);
 
   if (isHost) {
-    node.querySelectorAll('.diff-opt').forEach(opt => {
-      opt.addEventListener('click', () => {
-        unlockAudio(); sfx.click();
-        actions.setDifficulty(opt.dataset.diff);
-      });
-    });
-    bindBtn(node, '[data-a=start]', actions.start);
-    bindBtn(node, '[data-a=copy]', async () => {
-      try { await navigator.clipboard.writeText(state.link); toast('Link copiado! 📋'); }
-      catch { toast('Código: ' + code); }
-    });
+    bindAll(node, '[data-set]', (b) => actions.setSetting(b.dataset.set, b.dataset.val));
+    bind(node, '[data-a=start]', actions.start);
   } else {
-    bindBtn(node, '[data-a=ready]', actions.ready);
+    bind(node, '[data-a=ready]', actions.ready);
   }
-  bindBtn(node, '[data-a=leave]', actions.leave);
+  bind(node, '[data-a=copy]', async () => {
+    try { await navigator.clipboard.writeText(state.link); toast('Link copiado! 📋'); }
+    catch { toast('Código: ' + code); }
+  });
+  bind(node, '[data-a=leave]', actions.leave);
   show(node);
 }
 
-// ---------------------------------------------------------------- resultado
-// res: { title, trophy, rows: [{name, dist, score, coins, win, you}], note, canRematch }
+// ================================================================ RESULTADO
+// res: { gameId, rows:[{slot,name,score,detail,win,you}], note, canRematch, isHost }
 export function showResult(res, actions) {
-  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
+  const g = getGame(res.gameId);
+  const medals = ['🥇', '🥈', '🥉', '4️⃣'];
   const rows = res.rows.map((r, i) => `
-    <div class="result-row ${r.win ? 'win' : ''}" ${r.slot != null ? `style="border-left:4px solid ${slotColor(r.slot)}"` : ''}>
+    <div class="result-row ${r.win ? 'win' : ''}" style="border-left:4px solid ${slotHex(r.slot)}">
       <div class="rname">${medals[i] || ''} ${esc(r.name)}${r.you ? ' (você)' : ''}</div>
-      <div class="rstats">
-        Distância: <b>${nf(r.dist)} m</b><br>
-        Pontos: <b>${nf(r.score)}</b> · 🪙 ${nf(r.coins)}
-      </div>
-    </div>
-  `).join('');
+      <div class="rstats">${esc(r.detail || '')}<br><b>${nf(r.score)}</b> pts</div>
+    </div>`).join('');
 
-  const records = (res.records || []).map(t => `<div class="hint" style="color:var(--gold);font-weight:800">🏅 ${t}</div>`).join('');
+  const records = (res.records || [])
+    .map(t => `<div class="record-line">🏅 ${esc(t)}</div>`).join('');
 
   const node = el(`
     <div class="screen">
       <h2>RESULTADO</h2>
       <div class="result-card">
         <div class="trophy">${res.trophy || '🏆'}</div>
-        <div class="winner-name">${res.title}</div>
+        <div class="winner-name">${esc(res.title)}</div>
         ${rows}
         ${records}
-        ${res.earned ? `<div class="coin-bar" style="justify-content:center">+🪙 ${nf(res.earned)} ganhas</div>` : ''}
-        ${res.note ? `<p class="hint" style="max-width:none">${res.note}</p>` : ''}
+        ${res.earned ? `<div class="coin-bar" style="justify-content:center">+🪙 ${nf(res.earned)}</div>` : ''}
+        ${res.note ? `<p class="hint" style="max-width:none">${esc(res.note)}</p>` : ''}
       </div>
-      ${res.canRematch ? '<button class="btn green" data-a="again">JOGAR NOVAMENTE</button>' : ''}
-      <button class="btn ghost" data-a="exit">${res.exitLabel || 'SAIR DA SALA'}</button>
+      ${res.canRematch ? `<button class="btn green" data-a="again">${res.isHost ? 'JOGAR NOVAMENTE' : 'QUERO REVANCHE'}</button>` : ''}
+      <button class="btn ghost" data-a="exit">${esc(res.exitLabel || 'SAIR DA SALA')}</button>
     </div>
   `);
-  const againBtn = bindBtn(node, '[data-a=again]', (b) => {
-    b.disabled = true;
-    b.textContent = res.isHost ? 'PREPARANDO…' : 'AGUARDANDO HOST…';
+  const againBtn = bind(node, '[data-a=again]', (b) => {
+    if (!res.isHost) { b.disabled = true; b.textContent = 'AGUARDANDO HOST…'; }
     actions.again();
   });
-  bindBtn(node, '[data-a=exit]', actions.exit);
+  bind(node, '[data-a=exit]', actions.exit);
   show(node);
   return { againBtn };
 }
 
-// ---------------------------------------------------------------- modais
+// ================================================================ PERSONAGENS
+export function showSkins(progress, preview, actions) {
+  const cards = SKINS.map(s => {
+    const unlocked = isUnlocked(s, progress.totalCoins);
+    const sel = s.id === progress.skin;
+    return `
+      <div class="skin-card ${sel ? 'on' : ''} ${unlocked ? '' : 'locked'}" data-skin="${s.id}">
+        <img src="${preview(s.id)}" alt="${esc(s.name)}" />
+        <div class="sn">${unlocked ? esc(s.name) : '🔒'}</div>
+        <div class="sc">${unlocked ? (sel ? 'em uso' : 'disponível') : '🪙 ' + nf(s.cost)}</div>
+      </div>`;
+  }).join('');
+
+  const node = el(`
+    <div class="screen">
+      <h2>PERSONAGENS</h2>
+      <div class="coin-bar">🪙 ${nf(progress.totalCoins)} <span class="dim">acumuladas</span></div>
+      <div class="skin-grid">${cards}</div>
+      <p class="hint">Nas salas, a cor vem da sua posição — o personagem define o formato. Junte moedas correndo para destravar novos.</p>
+      <button class="btn ghost" data-a="back">VOLTAR</button>
+    </div>
+  `);
+  node.querySelectorAll('.skin-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const id = card.dataset.skin;
+      const skin = SKINS.find(s => s.id === id);
+      unlockAudio();
+      if (!isUnlocked(skin, progress.totalCoins)) {
+        toast(`Faltam ${nf(skin.cost - progress.totalCoins)} moedas para ${skin.name}`);
+        return;
+      }
+      sfx.powerup();
+      actions.pick(id);
+    });
+  });
+  bind(node, '[data-a=back]', actions.back);
+  show(node);
+}
+
+// ================================================================ MODAIS
 function modal(inner) {
   const back = el(`<div class="modal-back"><div class="modal">${inner}</div></div>`);
   back.addEventListener('click', (e) => { if (e.target === back) back.remove(); });
@@ -310,7 +478,7 @@ function modal(inner) {
 export function showNameEditor(current, onSave) {
   const m = modal(`
     <h3>SEU APELIDO</h3>
-    <p class="hint" style="margin:0 auto">É o nome que os outros jogadores veem na pista.</p>
+    <p class="hint" style="margin:0 auto">É o nome que os outros jogadores veem.</p>
     <input class="name-input" maxlength="12" placeholder="Jogador"
            autocomplete="off" autocorrect="off" spellcheck="false" value="${esc(current || '')}" />
     <button class="btn green" data-a="save">SALVAR</button>
@@ -318,29 +486,52 @@ export function showNameEditor(current, onSave) {
   `);
   const input = m.querySelector('.name-input');
   const save = () => { onSave(input.value); m.remove(); };
-  bindBtn(m, '[data-a=save]', save);
+  bind(m, '[data-a=save]', save);
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save(); });
-  bindBtn(m, '[data-a=cancel]', () => m.remove());
-  setTimeout(() => { input.focus(); input.select(); }, 100);
+  bind(m, '[data-a=cancel]', () => m.remove());
+  setTimeout(() => { input.focus(); input.select(); }, 120);
 }
 
-export function showHowTo() {
+// Instruções específicas de cada jogo, mostradas antes da primeira partida.
+const HOWTO = {
+  runner: [
+    ['👈👉', 'Deslize para os lados', 'troca de faixa'],
+    ['👆', 'Deslize para cima', 'pula barreiras e buracos'],
+    ['👇', 'Deslize para baixo', 'desliza sob obstáculos altos'],
+    ['❤️', '3 vidas', 'bater derruba sua velocidade'],
+  ],
+  flappy: [
+    ['👆', 'Toque na tela', 'bate as asas e sobe'],
+    ['🫳', 'Sem tocar', 'você cai — ache o ritmo'],
+    ['🟩', 'Atravesse os canos', 'cada um vale um ponto'],
+    ['💥', 'Uma batida', 'e sua rodada acaba'],
+  ],
+  guess: [
+    ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
+    ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],
+    ['🔥', 'Quente', 'significa que a ideia é parecida'],
+    ['🎯', 'Quem acertar primeiro', 'leva mais pontos'],
+  ],
+};
+
+export function showHowTo(gameId) {
+  const g = getGame(gameId);
+  const items = (HOWTO[gameId] || []).map(([ico, t, s]) =>
+    `<div class="howto-item"><span class="ico">${ico}</span><div><b>${t}</b>${s}</div></div>`).join('');
   const m = modal(`
-    <h3>COMO JOGAR</h3>
-    <div class="howto-item"><span class="ico">👈👉</span><div><b>Deslize para os lados</b>troca de faixa</div></div>
-    <div class="howto-item"><span class="ico">👆</span><div><b>Deslize para cima</b>pula barreiras baixas e buracos</div></div>
-    <div class="howto-item"><span class="ico">👇</span><div><b>Deslize para baixo</b>desliza sob barreiras altas</div></div>
-    <div class="howto-item"><span class="ico">🪙</span><div><b>Pegue moedas</b>viram pontos e destravam personagens</div></div>
-    <div class="howto-item"><span class="ico">❤️</span><div><b>3 vidas</b>bater derruba sua velocidade</div></div>
+    <h3>${g.emoji} ${esc(g.name)}</h3>
+    ${items}
     <button class="btn" data-a="ok">ENTENDI</button>
   `);
-  bindBtn(m, '[data-a=ok]', () => m.remove());
+  return new Promise((resolve) => {
+    bind(m, '[data-a=ok]', () => { m.remove(); resolve(); });
+  });
 }
 
 export function showSettings(onReset) {
   const p = getPrefs();
   const m = modal(`
-    <h3>CONFIGURAÇÕES</h3>
+    <h3>AJUSTES</h3>
     <div class="row"><span>🔊 Som</span><div class="toggle ${p.sound ? 'on' : ''}" data-a="sound"></div></div>
     <div class="row"><span>🎵 Música</span><div class="toggle ${p.music ? 'on' : ''}" data-a="music"></div></div>
     <button class="btn ghost" data-a="reset">APAGAR PROGRESSO</button>
@@ -357,102 +548,22 @@ export function showSettings(onReset) {
     e.target.classList.toggle('on', on);
     setMusic(on);
   });
-  bindBtn(m, '[data-a=reset]', (b) => {
-    if (b.dataset.sure) {
-      onReset && onReset();
-      m.remove();
-      toast('Progresso apagado');
-    } else {
-      b.dataset.sure = '1';
-      b.textContent = 'TEM CERTEZA? TOQUE DE NOVO';
-    }
+  bind(m, '[data-a=reset]', (b) => {
+    if (b.dataset.sure) { onReset && onReset(); m.remove(); toast('Progresso apagado'); }
+    else { b.dataset.sure = '1'; b.textContent = 'TEM CERTEZA? TOQUE DE NOVO'; }
   });
-  bindBtn(m, '[data-a=ok]', () => m.remove());
+  bind(m, '[data-a=ok]', () => m.remove());
 }
 
-// ---------------------------------------------------------------- HUD
-const hud = document.getElementById('hud');
-const hudDist = document.getElementById('hud-dist');
-const hudCoins = document.getElementById('hud-coins');
-const hudLives = document.getElementById('hud-lives');
-const hudRivals = document.getElementById('hud-rivals');
-const hudMsg = document.getElementById('hud-msg');
-const speedoFill = document.getElementById('speedo-fill');
-const speedoNum = document.getElementById('speedo-num');
-
-function hearts(n) {
-  const v = Math.max(0, n);
-  return '❤️'.repeat(v) + '🖤'.repeat(Math.max(0, 3 - v));
-}
-
-export function showHUD(hasRivals) {
-  hud.classList.remove('hidden');
-  hudMsg.classList.add('hidden');
-  hudRivals.classList.toggle('hidden', !hasRivals);
-  hudRivals.innerHTML = '';
-  updateHUD({ dist: 0, coins: 0, lives: 3, kmh: 0, speedFrac: 0, rivals: [] });
-}
-
-export function hideHUD() { hud.classList.add('hidden'); }
-
-export function updateHUD(s) {
-  hudDist.textContent = nf(s.dist) + ' m';
-  hudCoins.textContent = '🪙 ' + s.coins;
-  hudLives.textContent = hearts(s.lives);
-
-  speedoFill.style.width = Math.max(0, Math.min(1, s.speedFrac || 0)) * 100 + '%';
-  speedoNum.innerHTML = `${s.kmh || 0} <small>km/h</small>`;
-  speedoNum.classList.toggle('turbo', (s.speedFrac || 0) > 0.75);
-
-  if (!s.rivals || !s.rivals.length) return;
-  // reaproveita os chips existentes; só recria se a quantidade mudou
-  if (hudRivals.children.length !== s.rivals.length) {
-    hudRivals.innerHTML = s.rivals.map(() =>
-      '<div class="rival-chip"><div class="rn"></div><div class="rd"></div></div>').join('');
-  }
-  s.rivals.forEach((r, i) => {
-    const chip = hudRivals.children[i];
-    if (!chip) return;
-    chip.style.borderLeftColor = '#' + r.color.toString(16).padStart(6, '0');
-    chip.classList.toggle('dead', !r.alive);
-    chip.querySelector('.rn').textContent = `${r.name} ${r.alive ? hearts(r.lives) : '💀'}`;
-    const rd = chip.querySelector('.rd');
-    if (!r.alive) {
-      rd.textContent = nf(r.dist) + ' m';
-      rd.className = 'rd';
-    } else {
-      rd.textContent = r.delta >= 0 ? `+${nf(r.delta)} m` : `${nf(Math.abs(r.delta))} m atrás`;
-      rd.className = 'rd ' + (r.delta >= 0 ? 'ahead' : 'behind');
-    }
-  });
-}
-
-export function hudMessage(text, ms = 0) {
-  if (!text) { hudMsg.classList.add('hidden'); return; }
-  hudMsg.textContent = text;
-  hudMsg.classList.remove('hidden');
-  if (ms) setTimeout(() => hudMsg.classList.add('hidden'), ms);
-}
-
-// ---------------------------------------------------------------- countdown
-const cdOverlay = document.getElementById('countdown');
-const cdNum = document.getElementById('countdown-num');
-
-export function runCountdown(onGo) {
-  cdOverlay.classList.remove('hidden');
-  const steps = ['3', '2', '1', 'CORRA!'];
-  let i = 0;
-  const tick = () => {
-    if (i >= steps.length) { cdOverlay.classList.add('hidden'); return; }
-    const last = i === steps.length - 1;
-    cdNum.textContent = steps[i];
-    cdNum.style.fontSize = last ? '72px' : '120px';
-    cdNum.classList.remove('pop');
-    void cdNum.offsetWidth; // reinicia a animação
-    cdNum.classList.add('pop');
-    if (last) { sfx.go(); onGo(); } else { sfx.count(); }
-    i++;
-    setTimeout(tick, last ? 900 : 850);
-  };
-  tick();
+// Aviso ao host quando alguém cai no meio da partida.
+export function askContinue(who, onContinue, onEnd) {
+  const m = modal(`
+    <h3>⚠️ ${esc(who)} SAIU</h3>
+    <p class="hint" style="margin:0 auto">A partida pode seguir com quem ficou.</p>
+    <button class="btn green" data-a="go">CONTINUAR</button>
+    <button class="btn ghost" data-a="end">ENCERRAR PARTIDA</button>
+  `);
+  bind(m, '[data-a=go]', () => { m.remove(); onContinue && onContinue(); });
+  bind(m, '[data-a=end]', () => { m.remove(); onEnd && onEnd(); });
+  return m;
 }

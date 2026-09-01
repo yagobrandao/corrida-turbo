@@ -13,7 +13,7 @@
 //   - se o espaço até o próximo padrão for curto, a faixa livre nova fica a
 //     no máximo 1 faixa de distância da faixa livre anterior;
 //   - trens nunca se sobrepõem a outros padrões.
-import { Rng } from '../core/rng.js';
+import { Rng } from '../../core/rng.js';
 
 export const OB_LEN = { low: 2, high: 2, block: 5, train: 30, hole: 6 };
 
@@ -22,6 +22,8 @@ export class Track {
     this.rng = new Rng(seed);
     this.obstacles = [];   // { id, d, lane, type, len }
     this.coins = [];       // { id, d, lane }
+    this.powerups = [];    // { id, d, lane, pu }  pu = id do power-up
+    this._nextPuAt = 190;  // primeiro item aparece cedo para apresentar a mecânica
     this._cursor = 58;     // primeira ameaça já nos primeiros segundos
     this._prevFree = 1;    // faixa livre do último padrão
     this._nextId = 1;
@@ -44,6 +46,18 @@ export class Track {
   prune(dist) {
     this.obstacles = this.obstacles.filter(o => o.d + o.len > dist - 60);
     this.coins = this.coins.filter(c => c.d > dist - 60);
+    this.powerups = this.powerups.filter(p => p.d > dist - 60);
+  }
+
+  // Caixas de bônus: uma a cada ~10-16 segundos de corrida, sempre numa faixa
+  // livre do padrão mais próximo (nunca em cima de um obstáculo).
+  // A POSIÇÃO é determinística (mesma caixa no mesmo lugar para todos), mas o
+  // CONTEÚDO é sorteado por quem pega, na hora — cada jogador ganha um item
+  // diferente da mesma caixa.
+  _maybePowerup(d, freeLane) {
+    if (d < this._nextPuAt) return;
+    this.powerups.push({ id: this._nextId++, d: d + 2, lane: freeLane });
+    this._nextPuAt = d + this.rng.range(10, 16) * this.expectedSpeed(d);
   }
 
   _add(d, lane, type) {
@@ -55,29 +69,42 @@ export class Track {
     }
   }
 
+  // O nível de dificuldade acompanha a velocidade esperada, não a distância
+  // crua — com o teto em 600 km/h, mil metros passam em poucos segundos.
   _tier() {
-    const d = this._cursor;
-    if (d < 300) return 0;   // fácil
-    if (d < 800) return 1;   // médio
-    if (d < 1600) return 2;  // difícil
+    const v = this.expectedSpeed(this._cursor);
+    if (v < 34) return 0;    // fácil      (até ~120 km/h)
+    if (v < 60) return 1;    // médio      (até ~215 km/h)
+    if (v < 100) return 2;   // difícil    (até ~360 km/h)
     return 3;                // muito difícil
   }
 
   _gap() {
     const t = this._tier();
     const r = this.rng;
-    // valores em metros: com a velocidade maior, o espaçamento cresce junto
-    // para o tempo de reação continuar justo
-    if (t === 0) return r.range(42, 57);
-    if (t === 1) return r.range(34, 48);
-    if (t === 2) return r.range(27, 40);
-    return r.range(22, 35);
+    // gap em SEGUNDOS de reação, não em metros: a distância real é o tempo
+    // multiplicado pela velocidade esperada naquele ponto da pista. Assim o
+    // jogo continua justo mesmo com o teto em 600 km/h.
+    let secs;
+    if (t === 0) secs = r.range(2.0, 2.7);
+    else if (t === 1) secs = r.range(1.6, 2.3);
+    else if (t === 2) secs = r.range(1.3, 1.9);
+    else secs = r.range(1.05, 1.65);
+    return secs * this.expectedSpeed(this._cursor);
+  }
+
+  // Velocidade esperada numa posição da pista. Aproxima a rampa real
+  // (v² ≈ v0² + 2·a·d) de forma determinística: só depende da distância,
+  // nunca do relógio, então os dois aparelhos calculam o mesmo valor.
+  expectedSpeed(d) {
+    return Math.min(167, Math.sqrt(21 * 21 + 2 * 1.15 * d));
   }
 
   // Sorteia a faixa livre respeitando a distância até o padrão anterior.
   _pickFree(gap) {
     const r = this.rng;
-    if (gap >= 20) return r.int(0, 2);
+    // "curto" também é medido em tempo, não em metros
+    if (gap >= 1.4 * this.expectedSpeed(this._cursor)) return r.int(0, 2);
     // gap curto: fica na mesma faixa livre ou em uma vizinha
     const options = [this._prevFree];
     if (this._prevFree > 0) options.push(this._prevFree - 1);
@@ -101,6 +128,8 @@ export class Track {
 
     const p = r.pick(patterns);
     let endLen = 2;
+
+    this._maybePowerup(d, free);
 
     switch (p) {
       case 'single': {

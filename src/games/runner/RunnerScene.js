@@ -2,24 +2,28 @@
 // contra a pista (gerada pela seed compartilhada) e renderiza os rivais como
 // "ghosts" interpolados a partir dos snapshots recebidos pela rede.
 import Phaser from 'phaser';
+import { GAME_W, GAME_H, STATE_HZ, slotColor } from '../../core/config.js';
 import {
-  GAME_W, GAME_H, LANE_W, PLAYER_Y_FRAC, PX_PER_M,
+  LANE_W, PLAYER_Y_FRAC, PX_PER_M,
   SPEED_START, SPEED_MAX, SPEED_RAMP_UNTIL, SPEED_ACCEL_EARLY, SPEED_ACCEL_LATE,
+  VISUAL_REF_SPEED, VISUAL_COMPRESS,
   JUMP_DURATION, SLIDE_DURATION, LANE_TWEEN,
-  INVULN_TIME, LIVES, STATE_HZ, COIN_VALUE, SCORE_PER_M, SLOT_COLORS,
-  getDifficulty,
-} from '../core/config.js';
-import { Track } from '../world/track.js';
+  INVULN_TIME, LIVES, COIN_VALUE, SCORE_PER_M, getDifficulty,
+} from './config.js';
+import { Track } from './track.js';
 import { buildTextures, ensureRunnerTexture } from './textures.js';
 import { textureKey } from './skins.js';
-import { sfx } from './audio.js';
+import { sfx } from '../../core/audio.js';
+
+import { POWERUPS, rollPowerup } from './powerups.js';
 
 const SWIPE_MIN = 26;      // px mínimos para contar como swipe
 const JUMP_HEIGHT = 105;   // px no ápice do pulo
+const PU_EMOJI = Object.fromEntries(POWERUPS.map(p => [p.id, p.emoji]));
 
-export default class GameScene extends Phaser.Scene {
+export default class RunnerScene extends Phaser.Scene {
   constructor() {
-    super('run');
+    super('runner');
   }
 
   init(data) {
@@ -29,6 +33,8 @@ export default class GameScene extends Phaser.Scene {
     this.mySkin = data.mySkin || 'azul';
     this.mySlot = data.mySlot || 0;
     this.rivals = data.rivals || [];   // [{ slot, name, skin }]
+    // id do power-up -> valor efetivo (duração/potência) já com as melhorias
+    this.puValues = data.puValues || {};
     // a dificuldade vem do host e vale igual para todos na sala
     this.diff = getDifficulty(data.difficulty);
     this.speedStart = SPEED_START * this.diff.mult;
@@ -85,6 +91,12 @@ export default class GameScene extends Phaser.Scene {
     this._hudAcc = 0;
     this._pruneAcc = 0;
 
+    // power-ups: efeitos ativos { puId -> segundos restantes } + extras
+    this.effects = new Map();
+    this.debuffT = 0;        // "lento" recebido de um rival
+    this.bonusScore = 0;     // pontos extras de turbo/x2
+    this.puSprites = new Map();
+
     this._setupInput();
     this._syncSprites();
   }
@@ -124,7 +136,7 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _makeGhost(r) {
-    const color = SLOT_COLORS[r.slot % SLOT_COLORS.length];
+    const color = slotColor(r.slot);
     const ring = this.add.image(this.laneX[1], this.playerY + 40, 'ring')
       .setTint(color).setAlpha(0.7).setDepth(5);
     const sprite = this.add.image(this.laneX[1], this.playerY, ensureRunnerTexture(this, r.skin, r.slot))
@@ -255,10 +267,68 @@ export default class GameScene extends Phaser.Scene {
   getStats() {
     return {
       d: Math.floor(this.dist),
-      sc: Math.floor(this.dist * SCORE_PER_M + this.coins * COIN_VALUE),
+      sc: Math.floor(this.dist * SCORE_PER_M + this.coins * COIN_VALUE + this.bonusScore),
       co: this.coins,
       kmh: Math.round(this.topSpeed * 3.6),
     };
+  }
+
+  // ------------------------------------------------------------------
+  // power-ups
+  // ------------------------------------------------------------------
+  _tickEffects(dt) {
+    for (const [id, left] of this.effects) {
+      const next = left - dt;
+      if (next <= 0) this.effects.delete(id);
+      else this.effects.set(id, next);
+    }
+    if (this.debuffT > 0) this.debuffT -= dt;
+  }
+
+  _collectPowerups() {
+    const from = Math.min(this.prevDist ?? this.dist, this.dist) - 2;
+    const to = this.dist + 2;
+    for (const p of this.track.powerups) {
+      if (p.taken || p.lane !== this.lane) continue;
+      if (p.d < from || p.d > to) continue;
+      p.taken = true;
+      const s = this.puSprites.get(p.id);
+      if (s) {
+        this.coinBurst.emitParticleAt(s.bub.x, s.bub.y, 12);
+        s.bub.destroy(); s.txt.destroy();
+        this.puSprites.delete(p.id);
+      }
+      // o conteúdo da caixa é aleatório POR JOGADOR: sorteio local, fora da seed
+      this.applyPowerup(rollPowerup({ next: Math.random }));
+    }
+  }
+
+  applyPowerup(puId) {
+    const value = this.puValues[puId] ?? 4;
+    sfx.powerup();
+    switch (puId) {
+      case 'vida':
+        this.lives = Math.min(LIVES, this.lives + 1);
+        break;
+      case 'chuva':
+        this.coins += Math.round(value);
+        break;
+      case 'tiro':
+      case 'nevasca':
+        // quem resolve o alvo é o adaptador (ele conhece a rede)
+        if (this.hooks.onOffense) this.hooks.onOffense(puId, value);
+        this.effects.set(puId, 1.2); // só para aparecer no HUD por um instante
+        break;
+      default:
+        this.effects.set(puId, value);
+    }
+    if (this.hooks.onPowerup) this.hooks.onPowerup(puId);
+  }
+
+  // Lentidão vinda de um rival (tiro/nevasca).
+  applyDebuff(secs) {
+    this.debuffT = Math.max(this.debuffT, secs);
+    this.cameras.main.flash(200, 120, 180, 255);
   }
 
   // Estado compacto para a rede.
@@ -273,16 +343,33 @@ export default class GameScene extends Phaser.Scene {
   update(_, delta) {
     const dt = Math.min(delta / 1000, 0.05);
 
+    if (this.paused) return;
+
     if (this.running && !this.dead) {
       this.elapsed += dt;
       const accel = (this.speed < this.rampUntil ? SPEED_ACCEL_EARLY : SPEED_ACCEL_LATE) * this.diff.mult;
       this.speed = Math.min(this.speedMax, this.speed + accel * dt);
       if (this.speed > this.topSpeed) this.topSpeed = this.speed;
-      this.dist += this.speed * dt;
+
+      this._tickEffects(dt);
+      // a velocidade EFETIVA aplica turbo/freio/lentidão sem tocar na rampa
+      let v = this.speed;
+      if (this.effects.has('turbo')) v *= 1.5;
+      if (this.effects.has('freio')) v *= 0.6;
+      if (this.debuffT > 0) v *= 0.55;
+      this.effSpeed = v;
+
+      this.prevDist = this.dist;
+      this.dist += v * dt;
+      // turbo e x2 rendem pontos extras por metro percorrido
+      if (this.effects.has('turbo') || this.effects.has('x2')) {
+        this.bonusScore += v * dt * SCORE_PER_M;
+      }
 
       this._updateActions(dt);
       this._checkCollisions();
       this._collectCoins();
+      this._collectPowerups();
     }
 
     if (!this.running) return;
@@ -320,13 +407,20 @@ export default class GameScene extends Phaser.Scene {
       });
     }
     rivals.sort((a, b) => b.dist - a.dist);
+    const fx = [];
+    for (const [id, left] of this.effects) {
+      fx.push({ id, emoji: PU_EMOJI[id], left: Math.ceil(left) });
+    }
+    if (this.debuffT > 0) fx.push({ id: 'lento', emoji: '🐌', left: Math.ceil(this.debuffT), bad: true });
+    const shownSpeed = this.effSpeed ?? this.speed;
     this.hooks.updateHUD({
       dist: Math.floor(this.dist),
       coins: this.coins,
       lives: this.lives,
-      kmh: Math.round(this.speed * 3.6),
-      speedFrac: (this.speed - this.speedStart) / (this.speedMax - this.speedStart),
+      kmh: Math.round(shownSpeed * 3.6),
+      speedFrac: (shownSpeed - this.speedStart) / (this.speedMax - this.speedStart),
       rivals,
+      fx,
     });
   }
 
@@ -366,8 +460,12 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _checkCollisions() {
-    if (this.invulnT > 0) return;
-    const front = this.dist + 1.0, back = this.dist - 1.0;
+    if (this.invulnT > 0 || this.effects.has('fantasma')) return;
+    // colisão VARRIDA: cobre todo o trecho percorrido neste frame. A 600 km/h
+    // o personagem avança ~2.8 m por frame — um obstáculo de 2 m passaria
+    // inteiro entre dois frames se a checagem fosse só pontual.
+    const front = this.dist + 1.0;
+    const back = Math.min(this.prevDist ?? this.dist, this.dist) - 1.0;
     for (const o of this.track.obstacles) {
       if (o.done || o.lane !== this.lane) continue;
       if (o.d > front || o.d + o.len < back) continue;
@@ -382,6 +480,14 @@ export default class GameScene extends Phaser.Scene {
 
   _takeHit(o) {
     o.done = true;
+    if (this.effects.has('escudo')) {
+      // o escudo absorve a batida e se desfaz
+      this.effects.delete('escudo');
+      this.invulnT = 0.8;
+      sfx.powerup();
+      this.cameras.main.flash(150, 120, 220, 160);
+      return;
+    }
     this.lives--;
     this.invulnT = INVULN_TIME;
     this.hitBurst.emitParticleAt(this.player.x, this.player.y, 18);
@@ -405,9 +511,16 @@ export default class GameScene extends Phaser.Scene {
   }
 
   _collectCoins() {
+    // mesma varredura das colisões: a moeda conta se o trecho percorrido
+    // neste frame passou por cima dela
+    // com o ímã ativo, o alcance cresce e vale para as três faixas
+    const magnet = this.effects.has('ima');
+    const reach = magnet ? 12 : 1.8;
+    const from = Math.min(this.prevDist ?? this.dist, this.dist) - reach;
+    const to = this.dist + reach;
     for (const c of this.track.coins) {
-      if (c.taken || c.lane !== this.lane) continue;
-      if (Math.abs(c.d - this.dist) > 1.8) continue;
+      if (c.taken || (!magnet && c.lane !== this.lane)) continue;
+      if (c.d < from || c.d > to) continue;
       c.taken = true;
       this.coins++;
       sfx.coin();
@@ -422,19 +535,26 @@ export default class GameScene extends Phaser.Scene {
     }
   }
 
+  // Escala px/metro comprimida: encolhe com a velocidade para a tela seguir
+  // legível a 600 km/h, mas ainda transmitir aceleração real.
+  get pxm() {
+    if (this.speed <= VISUAL_REF_SPEED) return PX_PER_M;
+    return PX_PER_M * Math.pow(VISUAL_REF_SPEED / this.speed, VISUAL_COMPRESS);
+  }
+
   _scroll(dt) {
-    const px = this.speed * PX_PER_M * dt;
+    const px = (this.effSpeed ?? this.speed) * this.pxm * dt;
     this.dashes.forEach(d => { d.tilePositionY -= px; });
     this.sideL.tilePositionY -= px * 0.8;
     this.sideR.tilePositionY -= px * 0.8;
   }
 
   _worldY(d, len = 0) {
-    return this.playerY - (d - this.dist) * PX_PER_M - len * PX_PER_M / 2;
+    return this.playerY - (d - this.dist) * this.pxm - len * this.pxm / 2;
   }
 
   _syncSprites() {
-    const viewAhead = this.dist + (GAME_H / PX_PER_M) + 20;
+    const viewAhead = this.dist + (GAME_H / this.pxm) + 20;
     const viewBehind = this.dist - 25;
     this.track.ensure(viewAhead);
 
@@ -468,6 +588,28 @@ export default class GameScene extends Phaser.Scene {
       }
       s.y = this._worldY(c.d);
     }
+
+    // power-ups na pista (bolha + emoji)
+    for (const p of this.track.powerups) {
+      if (p.taken) continue;
+      if (p.d < viewBehind || p.d > viewAhead) {
+        const s = this.puSprites.get(p.id);
+        if (s) { s.bub.destroy(); s.txt.destroy(); this.puSprites.delete(p.id); }
+        continue;
+      }
+      let s = this.puSprites.get(p.id);
+      if (!s) {
+        const bub = this.add.image(this.laneX[p.lane], 0, 'pu-bubble').setDepth(4);
+        const txt = this.add.text(this.laneX[p.lane], 0, '🎁', { fontSize: '25px' })
+          .setOrigin(0.5).setDepth(4);
+        this.tweens.add({ targets: [bub, txt], scale: 1.12, duration: 420, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+        s = { bub, txt };
+        this.puSprites.set(p.id, s);
+      }
+      const y = this._worldY(p.d);
+      s.bub.y = y;
+      s.txt.y = y - 1;
+    }
   }
 
   _updateGhosts(dt) {
@@ -486,7 +628,7 @@ export default class GameScene extends Phaser.Scene {
       const targetX = (this.laneX[g.lane] ?? this.laneX[1]) + g.xOff;
       g.dispX = Phaser.Math.Linear(g.dispX, targetX, 0.25);
 
-      let y = this.playerY - (g.dispD - this.dist) * PX_PER_M;
+      let y = this.playerY - (g.dispD - this.dist) * this.pxm;
       const above = y < 92;
       const below = y > GAME_H - 40;
       g.arrow.setVisible(above && g.alive);

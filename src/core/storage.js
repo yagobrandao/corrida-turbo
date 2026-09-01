@@ -14,7 +14,8 @@ const DEFAULTS = {
   skin: 'azul',
   name: '',          // apelido; vazio = usa "Jogador N" do slot
   diff: 'normal',    // última dificuldade escolhida, reaproveitada na próxima sala
-  seenHowTo: false,
+  howto: {},         // por jogo: já viu as instruções?
+  upgrades: {},      // power-up id -> nível (1 a 5); ausente = nível 1
 };
 
 let cache = null;
@@ -63,8 +64,26 @@ export function setDifficulty(id) {
   write();
 }
 
-export function markHowToSeen() {
-  read().seenHowTo = true;
+export function markHowToSeen(gameId) {
+  const p = read();
+  if (!p.howto || typeof p.howto !== 'object') p.howto = {};
+  p.howto[gameId] = true;
+  write();
+}
+export function hasSeenHowTo(gameId) {
+  const h = read().howto;
+  return !!(h && h[gameId]);
+}
+
+// Nível de um power-up (1 = base).
+export function upgradeLevel(id) {
+  const u = read().upgrades;
+  return (u && u[id]) || 1;
+}
+export function setUpgradeLevel(id, level) {
+  const p = read();
+  if (!p.upgrades || typeof p.upgrades !== 'object') p.upgrades = {};
+  p.upgrades[id] = level;
   write();
 }
 

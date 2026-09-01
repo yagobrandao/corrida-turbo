@@ -35,11 +35,16 @@ export class NetSession {
     this.onJoin = null;      // (slot) => void        host
     this.onLeave = null;     // (slot) => void        host
     this.onHostGone = null;  // () => void            client
+    // capacidade da sala: definida pelo jogo escolhido, nunca acima do teto
+    this.capacity = MAX_PLAYERS;
+    // durante a partida a sala fecha: entrar no meio quebraria a seed
+    this.locked = false;
     this._pingTimer = null;
     this._closed = false;
   }
 
   on(type, fn) { this.handlers[type] = fn; }
+  off(type) { delete this.handlers[type]; }
 
   get connected() {
     return this.role === 'host'
@@ -127,7 +132,8 @@ export class NetSession {
   }
 
   _freeSlot() {
-    for (let s = 1; s < MAX_PLAYERS; s++) {
+    const cap = Math.min(this.capacity || MAX_PLAYERS, MAX_PLAYERS);
+    for (let s = 1; s < cap; s++) {
       if (!this.conns.has(s)) return s;
     }
     return null;
@@ -136,8 +142,9 @@ export class NetSession {
   _listenIncoming() {
     this.peer.on('connection', (conn) => {
       const slot = this._freeSlot();
-      if (slot === null) {
-        conn.on('open', () => { conn.send({ t: MSG.FULL }); setTimeout(() => conn.close(), 300); });
+      if (slot === null || this.locked) {
+        const why = this.locked ? MSG.KICKED : MSG.FULL;
+        conn.on('open', () => { conn.send({ t: why }); setTimeout(() => conn.close(), 300); });
         return;
       }
       this.conns.set(slot, conn);

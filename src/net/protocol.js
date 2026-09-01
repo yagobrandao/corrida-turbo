@@ -1,45 +1,29 @@
-// Mensagens trocadas pelo DataChannel (JSON compacto).
-// Camada de rede separada da lógica da partida: o jogo só conhece estes eventos.
+// Mensagens da PLATAFORMA (sala, lobby, ciclo de partida).
 //
 // Topologia em estrela: todo mundo fala com o HOST, que é quem retransmite.
-// O host nunca reencaminha uma mensagem crua — ele consolida o estado e envia
-// um snapshot único, para o tráfego não crescer ao quadrado com 5 jogadores.
+// Mensagens específicas de cada jogo não entram aqui — elas viajam dentro de
+// MSG.GAME e são entregues ao jogo ativo pelo net/bus.js.
 export const MSG = {
-  HELLO:  'h',   // client -> host: { t, skin, name }  entrou, apresenta-se
-  ROSTER: 'ro',  // host -> all:    { t, you, players } quem está na sala
-  READY:  'r',   // client -> host: { t, v }
-  SKIN:   'sk',  // client -> host: { t, skin, name }  trocou skin/apelido
-  START:  's',   // host -> all:    { t, seed }
-  STATE:  'st',  // client -> host: { t, d, ln, jy, sl, lv, co, sc }
-  SNAP:   'sn',  // host -> all:    { t, p: [[slot,d,ln,jy,sl,lv,sc,dead]] }
-  DEAD:   'dd',  // client -> host: { t, d, sc, co }
-  END:    'e',   // host -> all:    { t, rows, win }
-  AGAIN:  'a',   // client -> host: { t }
-  LEAVE:  'l',   // qualquer um:    { t }
-  FULL:   'f',   // host -> client: { t }               sala lotada
+  HELLO:  'h',   // client -> host: { skin, name }     entrou, apresenta-se
+  ROSTER: 'ro',  // host -> client: { you, players, room }
+  READY:  'r',   // client -> host: { v }
+  IDENT:  'id',  // client -> host: { skin, name }     trocou skin/apelido
+  START:  's',   // host -> all:    { seed, game, settings, players }
+  FINISH: 'f',   // host -> all:    { rows }
+  AGAIN:  'a',   // client -> host
+  LEAVE:  'l',
+  FULL:   'x',   // host -> client: sala lotada
+  KICKED: 'k',   // host -> client: sala fechada/partida encerrada
+  GAME:   'g',   // dois sentidos:  { p }  payload opaco do jogo ativo
   PING:   'pi',
   PONG:   'po',
 };
 
-// Ordem dos campos no snapshot compacto (índices do array por jogador).
-export const SNAP_FIELDS = ['slot', 'd', 'ln', 'jy', 'sl', 'lv', 'sc', 'dead'];
-
-export function packState(slot, s) {
-  return [
-    slot,
-    Math.round(s.d * 10) / 10,
-    s.ln,
-    Math.round(s.jy * 100) / 100,
-    s.sl ? 1 : 0,
-    s.lv,
-    Math.round(s.sc),
-    s.dead ? 1 : 0,
-  ];
-}
-
-export function unpackState(arr) {
-  return {
-    slot: arr[0], d: arr[1], ln: arr[2], jy: arr[3],
-    sl: arr[4], lv: arr[5], sc: arr[6], dead: !!arr[7],
-  };
-}
+// Mensagens do diretório de salas públicas (net/directory.js).
+// Trafegam entre um host e o peer que estiver bancando o HUB.
+export const HUB = {
+  REGISTER:  'hr',   // host -> hub:     { room }   também serve de heartbeat
+  UNREGISTER:'hu',   // host -> hub:     { code }
+  LIST:      'hl',   // browser -> hub
+  ROOMS:     'hs',   // hub -> browser:  { rooms }
+};
