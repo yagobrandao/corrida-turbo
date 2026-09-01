@@ -124,9 +124,12 @@ export function createGame(ctx) {
     playerLeft() {},
     destroy() {
       ended = true;
+      // solta a pausa antes de sair: a cena é reaproveitada e um flag preso
+      // faria a próxima partida abrir travada
+      if (scene) scene.paused = false;
       ui.setPauseMenu(null);
       ui.hideHUD();
-      if (phaser.scene.isActive(sceneKey)) phaser.scene.stop(sceneKey);
+      phaser.scene.stop(sceneKey);
     },
   };
 }

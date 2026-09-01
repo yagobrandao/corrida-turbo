@@ -27,6 +27,10 @@ export default class TDScene extends Phaser.Scene {
     this.oy = 118;
     this.state = 'select';
     this.speedMult = 1;
+    // a cena é reaproveitada entre partidas: sair pelo menu de pausa deixa
+    // este flag ligado, e sem zerar aqui a próxima partida abre congelada
+    this.paused = false;
+    this.now = 0;
     this._buildTextures();
     this._showSelect();
   }
@@ -101,12 +105,14 @@ export default class TDScene extends Phaser.Scene {
   // helpers de UI em canvas (alvos grandes para dedo)
   // ================================================================
   _btn(x, y, w, h, label, color, cb, group) {
-    const r = this.add.rectangle(x, y, w, h, color, 1).setStrokeStyle(2.5, OUTLINE).setDepth(50).setInteractive();
+    // depth 61/62: ACIMA do fundo do painel (60), senão o painel cobre o
+    // botão e ainda engole o toque — era o que travava melhorar/vender
+    const r = this.add.rectangle(x, y, w, h, color, 1).setStrokeStyle(2.5, OUTLINE).setDepth(61).setInteractive();
     r.on('pointerdown', () => { sfx.click(); cb(); });
     const t = this.add.text(x, y, label, {
       fontFamily: 'Fredoka, sans-serif', fontSize: '15px', fontStyle: '600',
       color: '#fff', align: 'center', wordWrap: { width: w - 10 },
-    }).setOrigin(0.5).setDepth(51);
+    }).setOrigin(0.5).setDepth(62);
     if (group) { group.push(r, t); }
     return { r, t };
   }
