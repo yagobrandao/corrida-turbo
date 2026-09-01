@@ -25,6 +25,7 @@ export const CATEGORIES = [
   { id: 'todos',  name: 'Todos' },
   { id: 'arcade', name: 'Arcade' },
   { id: 'party',  name: 'Party' },
+  { id: 'estrategia', name: 'Estratégia' },
 ];
 
 // As opções ficam no manifesto (e não dentro do jogo) porque a tela de criar
@@ -144,6 +145,19 @@ export const GAMES = [
     soloOnly: true,
     accent: '#2fb573',
     load: () => import('./island/IslandGame.js'),
+  },
+  {
+    id: 'battle',
+    name: 'Battle Tactics',
+    emoji: '⚔️',
+    tagline: 'Monte o exército e veja a batalha',
+    description: 'Auto battler: compre unidades na loja, junte três iguais para evoluir, combine facções e classes para ativar sinergias e posicione seu exército. Depois é só assistir: eles lutam sozinhos. Sobreviva 10 rodadas e derrote o Ancião de Pedra.',
+    category: 'estrategia',
+    minPlayers: 1,
+    maxPlayers: 1,
+    soloOnly: true,     // PvP 1v1 e co-op ficam para depois: o núcleo já é determinístico
+    accent: '#c9302a',
+    load: () => import('./autobattler/BattleGame.js'),
   },
   {
     id: 'guess',

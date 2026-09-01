@@ -1452,3 +1452,13 @@ html, body {
 /* pets e asas saem do quadro do boneco: os cards não podem cortar */
 .skin-card { overflow: visible; }
 .skin-card svg { overflow: visible; }
+
+/* ================= Battle Tactics: sinergias no HUD ================= */
+.bt-syn { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; max-width: 250px; }
+.bt-chip {
+  font-size: 10.5px; font-weight: 700; letter-spacing: .2px;
+  padding: 2px 7px; border-radius: 999px;
+  background: rgba(0,0,0,.35); color: var(--muted);
+  border: 1.5px solid rgba(255,255,255,.12);
+}
+.bt-chip.on { background: rgba(255,210,62,.18); color: var(--gold); border-color: var(--gold); }

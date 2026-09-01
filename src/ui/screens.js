@@ -793,6 +793,13 @@ const HOWTO = {
     ['🔨', 'Na bancada', 'melhore machado e picareta'],
     ['💾', 'Tudo fica salvo', 'a ilha continua de onde você parou'],
   ],
+  battle: [
+    ['🛒', 'Compre unidades na loja', 'o ouro entra a cada rodada; guarde 10+ e ganhe juros'],
+    ['👆', 'Arraste para o campo', 'a metade de baixo é sua — tanques na frente, atiradores atrás'],
+    ['⭐', 'Três iguais viram uma ★★', 'junte três ★★ para a rara ★★★'],
+    ['🔗', 'Combine facções e classes', 'sinergias deixam o time inteiro mais forte'],
+    ['⚔️', 'Toque em LUTAR', 'eles lutam sozinhos; sobreviva 10 rodadas e vença o chefe'],
+  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],

@@ -192,6 +192,38 @@ const ARTS = {
     <circle cx="24" cy="20" r="2.6" fill="#fff" opacity=".7"/><circle cx="140" cy="26" r="2" fill="#fff" opacity=".5"/>
   `, 'island'),
 
+  battle: (a) => thumbWrap(a, `
+    <g opacity=".9">
+      ${[0, 1, 2, 3, 4].map(c => [0, 1, 2].map(r =>
+        `<rect x="${30 + c * 20}" y="${24 + r * 18}" width="19" height="17" rx="2" fill="${(c + r) % 2 ? '#ffffff' : '#000000'}" opacity="${(c + r) % 2 ? '.10' : '.14'}"/>`).join('')).join('')}
+    </g>
+    <path d="M30 51 h100" stroke="#ffd23e" stroke-width="2" opacity=".6"/>
+    <g transform="translate(60 72)">
+      <ellipse cx="0" cy="12" rx="12" ry="4" fill="#000" opacity=".25"/>
+      <ellipse cx="0" cy="0" rx="13" ry="11" fill="#8a5a3c" stroke="${OUTLINE}" stroke-width="2.5"/>
+      <rect x="-7" y="2" width="14" height="8" rx="3" fill="#6b4a2e"/>
+      <path d="M-6 10 L-4 4 L-2 10 Z M6 10 L4 4 L2 10 Z" fill="#fff"/>
+      <circle cx="-5" cy="-3" r="2.6" fill="#fff"/><circle cx="5" cy="-3" r="2.6" fill="#fff"/>
+      <circle cx="-4.4" cy="-2.6" r="1.3" fill="${OUTLINE}"/><circle cx="5.6" cy="-2.6" r="1.3" fill="${OUTLINE}"/>
+    </g>
+    <g transform="translate(100 74)">
+      <ellipse cx="0" cy="11" rx="10" ry="3.5" fill="#000" opacity=".25"/>
+      <path d="M0 -20 L-6 -6 L6 -6 Z" fill="#ff8b3d"/><path d="M0 -15 L-3 -6 L3 -6 Z" fill="#ffd23e"/>
+      <circle cx="0" cy="2" r="10" fill="#e8483f" stroke="${OUTLINE}" stroke-width="2.5"/>
+      <circle cx="-4" cy="0" r="2.4" fill="#fff"/><circle cx="4" cy="0" r="2.4" fill="#fff"/>
+      <circle cx="-3" cy=".4" r="1.2" fill="${OUTLINE}"/><circle cx="5" cy=".4" r="1.2" fill="${OUTLINE}"/>
+    </g>
+    <g transform="translate(80 34)">
+      <ellipse cx="0" cy="10" rx="9" ry="3.5" fill="#000" opacity=".25"/>
+      <path d="M-14 -4 L-3 2 L-5 8 Z M14 -4 L3 2 L5 8 Z" fill="#ff8b3d"/>
+      <ellipse cx="0" cy="2" rx="8" ry="9" fill="#ffd23e" stroke="${OUTLINE}" stroke-width="2.5"/>
+      <path d="M-3 -10 L-1 -14 L1 -9 L3 -14 L4 -9 Z" fill="#ff8b3d"/>
+      <circle cx="-3" cy="-1" r="2" fill="#fff"/><circle cx="3" cy="-1" r="2" fill="#fff"/>
+    </g>
+    <path d="M126 14 l3 6 l6 1 l-4.5 4 l1 6 l-5.5 -3 l-5.5 3 l1 -6 l-4.5 -4 l6 -1 Z" fill="#ffd23e"/>
+    <path d="M22 88 l2 4 l4 .7 l-3 3 l.7 4 l-3.7 -2 l-3.7 2 l.7 -4 l-3 -3 l4 -.7 Z" fill="#ffd23e" opacity=".7"/>
+  `, 'battle'),
+
   guess: (a) => thumbWrap(a, `
     <g transform="translate(80 34)">
       <rect x="-34" y="-22" width="68" height="42" rx="12" fill="#fff"/>

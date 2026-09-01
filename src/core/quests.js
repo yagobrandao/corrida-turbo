@@ -52,6 +52,11 @@ export const METRICS = {
 
   islandGather:  (ev) => g(ev, 'island', 'gathered'),
   islandBuilt:   (ev) => g(ev, 'island', 'built'),
+
+  battleRound:   (ev) => g(ev, 'battle', 'round'),
+  battleWon:     (ev) => g(ev, 'battle', 'won'),
+  battleThree:   (ev) => g(ev, 'battle', 'threeStars'),
+  battleBoss:    (ev) => g(ev, 'battle', 'boss'),
 };
 
 // ------------------------------------------------------------------
@@ -78,6 +83,7 @@ export const DAILY_POOL = [
   D('d_guess2',   '🎯', 'Acerte 2 palavras no Adivinhe',   'guessCorrect', 2,  90),
   D('d_score1k',  '⭐', 'Faça 1.000 pontos numa partida',  'score',        1000, 80, 'best'),
   D('d_td8',      '🏰', 'Chegue à onda 8 no Torre & Cerco', 'tdWave',      8,   90, 'best'),
+  D('d_bt5',      '⚔️', 'Chegue à rodada 5 no Battle Tactics', 'battleRound', 5, 90, 'best'),
   D('d_td60',     '⚔️', 'Derrote 60 inimigos defendendo',   'tdKills',     60,  70),
   D('d_isl40',    '🏝️', 'Colete 40 recursos na ilha',       'islandGather', 40, 80),
 ];
@@ -116,6 +122,9 @@ export const ACHIEVEMENTS = [
   A('a_tdboss',   '👑', 'Caçador de golens',  'Derrote 3 chefes defendendo',       'tdBosses',      3, 300),
   A('a_isl500',   '🪓', 'Lenhador',           'Colete 500 recursos na ilha',       'islandGather', 500, 400),
   A('a_islbase',  '🏠', 'Lar, doce lar',      'Construa as 3 estruturas da ilha',  'islandBuilt',    3, 350, 'best'),
+  A('a_bt3star',  '⭐', 'Lendária',           'Crie uma unidade ★★★ no Battle Tactics', 'battleThree', 1, 300, 'best'),
+  A('a_btboss',   '👑', 'Quebra-pedra',       'Derrote o Ancião de Pedra',         'battleBoss',     1, 400, 'best'),
+  A('a_btwins',   '⚔️', 'General',            'Vença 3 corridas do Battle Tactics', 'battleWon',      3, 500),
   A('a_streak3',  '🔥', 'Três dias',          'Jogue em 3 dias diferentes',        '__streak',      3, 250),
   A('a_streak7',  '📅', 'Semana cheia',       'Jogue em 7 dias diferentes',        '__streak',      7, 600),
   A('a_full4',    '🎉', 'Sala cheia',         'Jogue numa sala com 4 jogadores',   'fullRoom',      1, 300),
