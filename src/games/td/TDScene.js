@@ -341,6 +341,8 @@ export default class TDScene extends Phaser.Scene {
     }).setOrigin(0.5).setDepth(50);
     this.prepUI.push(this.prepText);
     this.startBtn = this._btn(GAME_W / 2, this.oy + ROWS * TILE + 96, 220, 44, 'INICIAR AGORA', 0x23a563, () => this._launchWave(true), this.prepUI);
+    // se a onda acabou com um painel aberto, a barra nasce escondida
+    if (this._panelOpen()) this._setPrepVisible(false);
     if (this.hooks.updateHUD) this._pushHUD();
   }
 
@@ -385,12 +387,36 @@ export default class TDScene extends Phaser.Scene {
     this._openBuildPanel();
   }
 
+  // A barra de preparação vive no mesmo rodapé dos painéis. Em vez de
+  // empilhar camadas, ela some enquanto um painel está aberto.
+  _setPrepVisible(v) {
+    if (!this.prepUI) return;
+    for (const o of this.prepUI) {
+      if (o.setVisible) o.setVisible(v);
+      if (o.input) o.input.enabled = v;
+    }
+  }
+
+  _panelOpen() { return !!(this.panelUI && this.panelUI.length); }
+
   _panelBase(h) {
     const y = GAME_H - h / 2 - 8;
+    const top = y - h / 2;
     this.panelUI = this.panelUI || [];
     this.panelUI.push(this.add.rectangle(GAME_W / 2, y, GAME_W - 16, h, 0x2a2358, 0.97)
       .setStrokeStyle(2.5, 0x453a82).setDepth(60).setInteractive());
-    return y - h / 2;
+
+    // fechar explícito: sem isso não dá para voltar ao INICIAR AGORA
+    const cx = GAME_W - 26, cy = top + 15;
+    const c = this.add.circle(cx, cy, 15, 0x453a82).setDepth(63).setInteractive();
+    c.on('pointerdown', () => { sfx.click(); this._closePanels(); });
+    const ct = this.add.text(cx, cy, '✕', {
+      fontFamily: 'Fredoka, sans-serif', fontSize: '15px', fontStyle: '700', color: '#fff',
+    }).setOrigin(0.5).setDepth(64);
+    this.panelUI.push(c, ct);
+
+    this._setPrepVisible(false);
+    return top;
   }
 
   _closePanels() {
@@ -400,6 +426,7 @@ export default class TDScene extends Phaser.Scene {
     this.rangeCircle.setVisible(false);
     this.selectedTile = null;
     this.selectedTower = null;
+    if (this.state === 'prep') this._setPrepVisible(true);
   }
 
   _openBuildPanel() {
