@@ -57,6 +57,7 @@ export const METRICS = {
   battleWon:     (ev) => g(ev, 'battle', 'won'),
   battleThree:   (ev) => g(ev, 'battle', 'threeStars'),
   battleBoss:    (ev) => g(ev, 'battle', 'boss'),
+  battlePvpWon:  (ev) => g(ev, 'battle', 'pvpWon'),
 };
 
 // ------------------------------------------------------------------
@@ -125,6 +126,7 @@ export const ACHIEVEMENTS = [
   A('a_bt3star',  '⭐', 'Lendária',           'Crie uma unidade ★★★ no Battle Tactics', 'battleThree', 1, 300, 'best'),
   A('a_btboss',   '👑', 'Quebra-pedra',       'Derrote o Ancião de Pedra',         'battleBoss',     1, 400, 'best'),
   A('a_btwins',   '⚔️', 'General',            'Vença 3 corridas do Battle Tactics', 'battleWon',      3, 500),
+  A('a_btpvp',    '🤺', 'Duelista',           'Vença um amigo no Battle Tactics',  'battlePvpWon',   1, 350),
   A('a_streak3',  '🔥', 'Três dias',          'Jogue em 3 dias diferentes',        '__streak',      3, 250),
   A('a_streak7',  '📅', 'Semana cheia',       'Jogue em 7 dias diferentes',        '__streak',      7, 600),
   A('a_full4',    '🎉', 'Sala cheia',         'Jogue numa sala com 4 jogadores',   'fullRoom',      1, 300),
