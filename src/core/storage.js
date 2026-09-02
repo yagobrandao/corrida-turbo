@@ -1,7 +1,7 @@
 // Progresso persistente no localStorage.
 // Tudo é opcional: se o navegador bloquear o storage (modo privado do Safari,
 // por exemplo), o jogo continua funcionando com os valores padrão em memória.
-import { SLOT_IDS } from './cosmetics.js';
+import { SLOT_IDS, TINT_SLOTS, PALETTE_IDS } from './cosmetics.js';
 
 const KEY = 'ct-progress-v1';
 
@@ -14,10 +14,14 @@ const DEFAULTS = {
   races: 0,
   wins: 0,
   skin: 'azul',
-  // cosméticos equipados, um por categoria (ver core/cosmetics.js)
+  // cosméticos equipados, um por categoria (ver core/cosmetics.js): o
+  // desenho (formato) e, para as categorias com paleta, a cor escolhida
+  // (null = cores originais do desenho — a cor em si nunca custa nada)
   color: 'none', hat: 'none', hair: 'none', glasses: 'none',
   face: 'none', outfit: 'none', wings: 'none', pet: 'none',
-  owned: [],         // ids de cosméticos comprados
+  hatTint: null, hairTint: null, glassesTint: null, faceTint: null,
+  outfitTint: null, wingsTint: null, petTint: null,
+  owned: [],         // ids de cosméticos (desenhos) comprados
   name: '',          // apelido; vazio = usa "Jogador N" do slot
   diff: 'normal',    // última dificuldade escolhida, reaproveitada na próxima sala
   howto: {},         // por jogo: já viu as instruções?
@@ -42,6 +46,27 @@ function read() {
     cache.owned = [...owned, 'shades'];
     if (cache.face === 'cool') { cache.face = 'none'; cache.glasses = 'shades'; }
   }
+  // migração: cor deixou de ser uma peça separada ("cap_ruby") e virou um
+  // desenho + uma cor da paleta escolhida à parte. Separa o que já estava
+  // equipado e comprado, sem perder nada.
+  const splitVariant = (id) => {
+    const i = typeof id === 'string' ? id.lastIndexOf('_') : -1;
+    if (i <= 0) return null;
+    const tint = id.slice(i + 1);
+    return PALETTE_IDS.has(tint) ? { base: id.slice(0, i), tint } : null;
+  };
+  let migrated = false;
+  for (const slot of TINT_SLOTS) {
+    const v = splitVariant(cache[slot]);
+    if (v) { cache[slot] = v.base; if (!cache[slot + 'Tint']) cache[slot + 'Tint'] = v.tint; migrated = true; }
+  }
+  if (owned.some(id => splitVariant(id))) {
+    const cleaned = new Set();
+    for (const id of owned) { const v = splitVariant(id); cleaned.add(v ? v.base : id); }
+    cache.owned = [...cleaned];
+    migrated = true;
+  }
+  if (migrated) write();
   return cache;
 }
 
@@ -70,6 +95,13 @@ export function buyCosmetic(id, cost) {
 export function equipCosmetic(slot, id) {
   const p = read();
   if (SLOT_IDS.includes(slot)) { p[slot] = id; write(); }
+}
+
+// Cor é sempre de graça: não é comprada, só escolhida — vale pra qualquer
+// desenho já comprado naquela categoria. `null` volta às cores originais.
+export function setTint(slot, tintId) {
+  const p = read();
+  if (TINT_SLOTS.includes(slot)) { p[slot + 'Tint'] = tintId; write(); }
 }
 
 export function setSkin(id) {

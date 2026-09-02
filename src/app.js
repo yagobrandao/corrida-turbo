@@ -594,15 +594,13 @@ function leaveRoom() {
 // Telas auxiliares
 // ------------------------------------------------------------------
 let cosTab = 'skin';
-// filtro da vitrine: cor (id da combinação, null = "Original", 'all' = todas)
-// e "só o que tenho" — zera a cor ao trocar de aba (a lista muda de peça)
-let cosFilter = { cw: 'all', owned: false };
+// "só o que tenho" na vitrine — zera ao trocar de aba
+let cosFilter = { owned: false };
 async function showSkinsScreen() {
   await ensurePhaser();
   phase = 'skins';
   ui.showSkins(store.getProgress(), (id) => phaser.textures.getBase64(textureKey(id)), {
-    tab: (t) => { cosTab = t; cosFilter = { cw: 'all', owned: false }; showSkinsScreen(); },
-    filterCw: (cw) => { cosFilter = { ...cosFilter, cw }; sfx.click(); showSkinsScreen(); },
+    tab: (t) => { cosTab = t; cosFilter = { owned: false }; showSkinsScreen(); },
     filterOwned: (owned) => { cosFilter = { ...cosFilter, owned }; sfx.click(); showSkinsScreen(); },
     pick: (id) => {
       store.setSkin(id);
@@ -611,6 +609,13 @@ async function showSkinsScreen() {
     },
     equip: (slot, id) => {
       store.equipCosmetic(slot, id);
+      broadcastIdentity();
+      showSkinsScreen();
+    },
+    // cor é de graça: nunca passa por buyCosmetic, só marca a preferência
+    tint: (slot, tintId) => {
+      store.setTint(slot, tintId);
+      sfx.click();
       broadcastIdentity();
       showSkinsScreen();
     },

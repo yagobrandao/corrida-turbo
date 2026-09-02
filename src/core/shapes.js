@@ -23,7 +23,7 @@ function resolve(c, pal) {
   if (typeof c === 'number') return c;
   return (pal && pal[c] !== undefined) ? pal[c] : OUTLINE;
 }
-const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+export const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
 // ------------------------------------------------------------------ SVG
 export function partsToSVG(parts, pal) {
