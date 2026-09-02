@@ -3,7 +3,7 @@
 // tabelas que pintam os personagens dentro das partidas.
 import { getSkin } from '../games/runner/skins.js';
 import { partsToSVG } from '../core/shapes.js';
-import { backParts, frontParts, faceParts, bodyColor } from '../core/cosmetics.js';
+import { backParts, frontParts, faceParts, mouthParts, bodyColor } from '../core/cosmetics.js';
 
 const hex = (n) => '#' + n.toString(16).padStart(6, '0');
 
@@ -76,6 +76,7 @@ export function charSVG(skinId, { size = 120, tint = null, blink = true, cos = n
     <rect x="11" y="24" width="54" height="72" rx="25" fill="${body}"/>
     <rect x="20" y="58" width="36" height="32" rx="16" fill="${belly}"/>
     ${face}
+    ${partsToSVG(mouthParts(cos), pal)}
     <circle cx="21" cy="52" r="4" fill="#fff" opacity=".25"/>
     <circle cx="55" cy="52" r="4" fill="#fff" opacity=".25"/>
     ${partsToSVG(frontParts(cos), pal)}

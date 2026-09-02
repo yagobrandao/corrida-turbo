@@ -3,7 +3,7 @@
 import { SKINS, getSkin, textureKey, slotTextureKey } from './skins.js';
 import { SLOT_COLORS } from '../../core/config.js';
 import { drawParts } from '../../core/shapes.js';
-import { backParts, frontParts, faceParts, bodyColor, cosKey } from '../../core/cosmetics.js';
+import { backParts, frontParts, faceParts, mouthParts, bodyColor, cosKey } from '../../core/cosmetics.js';
 
 const OUTLINE = 0x1c2440;
 
@@ -89,6 +89,9 @@ function drawRunner(g, skin, cos) {
     g.fillStyle(0xffffff, 1); g.fillCircle(28, 42, 8); g.fillCircle(48, 42, 8);
     g.fillStyle(OUTLINE, 1); g.fillCircle(30, 43, 4); g.fillCircle(50, 43, 4);
   }
+
+  // boca: a do rosto equipado, ou a padrão — todo boneco tem uma
+  drawParts(g, mouthParts(cos), pal);
 
   // bochechas
   g.fillStyle(0xffffff, 0.25); g.fillCircle(21, 52, 4); g.fillCircle(55, 52, 4);

@@ -35,12 +35,18 @@ export const PALETTE_IDS = new Set(PALETTE.map(c => c.id));
 // Resolve as formas de um desenho para uma cor: `tintId` nulo usa as cores
 // originais do desenho; um id da paleta substitui 'p'/'q'/'k' por ela.
 // Formas com cor numérica (não-símbolo) nunca são afetadas.
-function resolveParts(design, tintId) {
-  if (!design || !design.parts) return null;
+function resolveShapes(shapes, design, tintId) {
+  if (!shapes) return null;
   const t = tintId && PALETTE.find(c => c.id === tintId);
-  const roles = t || { p: design.p ?? 0x888888, q: design.q ?? 0x555555, k: design.k ?? W };
-  return design.parts.map(sh => ({ ...sh, c: typeof sh.c === 'string' && roles[sh.c] !== undefined ? roles[sh.c] : sh.c }));
+  const roles = t || { p: design?.p ?? 0x888888, q: design?.q ?? 0x555555, k: design?.k ?? W };
+  return shapes.map(sh => ({ ...sh, c: typeof sh.c === 'string' && roles[sh.c] !== undefined ? roles[sh.c] : sh.c }));
 }
+const resolveParts = (design, tintId) => resolveShapes(design?.parts, design, tintId);
+
+// Boca padrão: todo boneco tem uma, mesmo sem rosto equipado. Um rosto pode
+// trocar por outra (`mouth: [...]`) ou suprimir (`mouth: []`) quando a boca
+// já faz parte do desenho dos olhos.
+const DEFAULT_MOUTH = [A(38, 52, 6, 2.2, OUTLINE)];
 
 // ---------------------------------------------------------------- CORES (corpo)
 // Trocam a cor do corpo; a skin continua definindo o formato/adereço.
@@ -369,7 +375,7 @@ export const FACES = [
   { id: 'none', name: 'Normal', cost: 0 },
   { id: 'happy', name: 'Feliz', cost: 100, p: OUTLINE, parts: [A(28, 44, 8, 4, 'p'), A(48, 44, 8, 4, 'p')] },
   { id: 'wink', name: 'Piscada', cost: 160, p: OUTLINE, parts: [C(28, 42, 8, W), C(30, 43, 4, 'p'), A(48, 44, 8, 4, 'p')] },
-  { id: 'angry', name: 'Bravo', cost: 220, p: OUTLINE, parts: [
+  { id: 'angry', name: 'Bravo', cost: 220, mouth: [L(31, 56, 38, 53, 2.8, OUTLINE), L(38, 53, 45, 56, 2.8, OUTLINE)], p: OUTLINE, parts: [
     C(28, 42, 8, W), C(48, 42, 8, W), C(30, 43, 4, 'p'), C(50, 43, 4, 'p'), T(18, 29, 36, 36, 18, 36, OUTLINE), T(58, 29, 40, 36, 58, 36, OUTLINE),
   ] },
   { id: 'star', name: 'Estrelado', cost: 400, p: 0xffd23e, parts: [
@@ -387,13 +393,13 @@ export const FACES = [
   { id: 'robot', name: 'Robô', cost: 460, p: 0x3ddad7, parts: [
     R(16, 34, 44, 16, 4, OUTLINE), R(18, 36, 40, 12, 3, 0x151233), R(23, 39, 8, 6, 1, 'p'), R(45, 39, 8, 6, 1, 'p'), R(33, 41, 10, 2, 1, 'p', 0.6),
   ] },
-  { id: 'surprised', name: 'Surpreso', cost: 180, p: OUTLINE, parts: [
+  { id: 'surprised', name: 'Surpreso', cost: 180, mouth: [], p: OUTLINE, parts: [
     C(28, 42, 9, W), C(48, 42, 9, W), C(28, 42, 3.5, 'p'), C(48, 42, 3.5, 'p'), E(38, 58, 5, 6, OUTLINE),
   ] },
-  { id: 'sad', name: 'Tristinho', cost: 160, p: OUTLINE, parts: [
+  { id: 'sad', name: 'Tristinho', cost: 160, mouth: [L(31, 56, 38, 53, 2.5, OUTLINE), L(38, 53, 45, 56, 2.5, OUTLINE)], p: OUTLINE, parts: [
     C(28, 42, 8, W), C(48, 42, 8, W), C(28, 45, 4, 'p'), C(48, 45, 4, 'p'), T(18, 36, 36, 30, 34, 36, OUTLINE), T(58, 36, 40, 30, 42, 36, OUTLINE),
   ] },
-  { id: 'laugh', name: 'Gargalhada', cost: 240, p: OUTLINE, parts: [
+  { id: 'laugh', name: 'Gargalhada', cost: 240, mouth: [], p: OUTLINE, parts: [
     A(28, 44, 8, 4, 'p'), A(48, 44, 8, 4, 'p'), E(38, 60, 9, 6, OUTLINE), E(38, 62, 6, 3, 0xff8fc4),
   ] },
   { id: 'hearteyes', name: 'Apaixonado', cost: 360, p: 0xe8483f, parts: [
@@ -402,21 +408,21 @@ export const FACES = [
   { id: 'catface', name: 'Felino', cost: 300, p: 0xffd23e, parts: [
     C(28, 42, 8, W), C(48, 42, 8, W), C(28, 42, 6, 'p'), C(48, 42, 6, 'p'), E(28, 42, 1.6, 5.5, OUTLINE), E(48, 42, 1.6, 5.5, OUTLINE),
   ] },
-  { id: 'cyclops', name: 'Ciclope', cost: 420, p: OUTLINE, parts: [
+  { id: 'cyclops', name: 'Ciclope', cost: 420, mouth: [A(38, 59, 5, 2.2, OUTLINE)], p: OUTLINE, parts: [
     C(38, 42, 13, OUTLINE), C(38, 42, 10.5, W), C(38, 43, 5, 'p'), C(35, 39, 2, W),
   ] },
-  { id: 'closed', name: 'Zen', cost: 140, p: OUTLINE, parts: [A(28, 40, 8, 4, 'p'), A(48, 40, 8, 4, 'p'), A(38, 60, 5, 3, OUTLINE)] },
-  { id: 'tongue', name: 'Língua', cost: 200, p: OUTLINE, parts: [
+  { id: 'closed', name: 'Zen', cost: 140, mouth: [], p: OUTLINE, parts: [A(28, 40, 8, 4, 'p'), A(48, 40, 8, 4, 'p'), A(38, 60, 5, 3, OUTLINE)] },
+  { id: 'tongue', name: 'Língua', cost: 200, mouth: [], p: OUTLINE, parts: [
     C(28, 42, 8, W), C(30, 43, 4, 'p'), A(48, 44, 8, 4, 'p'), R(34, 56, 10, 10, 5, 0xff6b9d), R(34, 54, 10, 3, 1.5, OUTLINE),
   ] },
   { id: 'dots', name: 'Pontinhos', cost: 120, p: OUTLINE, parts: [C(28, 42, 3.5, 'p'), C(48, 42, 3.5, 'p'), L(35, 52, 41, 52, 2.5, OUTLINE)] },
-  { id: 'glow', name: 'Brilhante', cost: 480, p: 0x3ddad7, parts: [
+  { id: 'glow', name: 'Brilhante', cost: 480, mouth: [A(38, 56, 5, 2, OUTLINE)], p: 0x3ddad7, parts: [
     C(28, 42, 9, 'p', 0.35), C(48, 42, 9, 'p', 0.35), C(28, 42, 6, 'p'), C(48, 42, 6, 'p'), C(26, 40, 2, W), C(46, 40, 2, W),
   ] },
   { id: 'brows', name: 'Sobrancelhudo', cost: 180, p: OUTLINE, parts: [
     C(28, 42, 8, W), C(48, 42, 8, W), C(30, 43, 4, 'p'), C(50, 43, 4, 'p'), R(18, 28, 20, 5, 2.5, OUTLINE), R(38, 28, 20, 5, 2.5, OUTLINE),
   ] },
-  { id: 'wide', name: 'Olhos arregalados', cost: 160, p: OUTLINE, parts: [
+  { id: 'wide', name: 'Olhos arregalados', cost: 160, mouth: [A(38, 56, 5, 2, OUTLINE)], p: OUTLINE, parts: [
     C(28, 42, 10, W), C(48, 42, 10, W), C(28, 42, 3, 'p'), C(48, 42, 3, 'p'),
   ] },
   { id: 'sparkle', name: 'Brilhoso', cost: 260, p: 0x2b7fd4, parts: [
@@ -425,28 +431,61 @@ export const FACES = [
   { id: 'pirateeye', name: 'Tapa-olho', cost: 220, p: OUTLINE, parts: [
     A(48, 44, 8, 4, 'p'), E(28, 42, 10, 8, 'p'), L(20, 36, 8, 30, 2, 'p'), L(36, 36, 48, 30, 2, 'p'),
   ] },
-  { id: 'bandaid', name: 'Curativo', cost: 140, p: OUTLINE, parts: [
+  { id: 'bandaid', name: 'Curativo', cost: 140, mouth: [A(38, 58, 5, 2, OUTLINE)], p: OUTLINE, parts: [
     A(28, 44, 8, 4, 'p'), A(48, 44, 8, 4, 'p'), R(30, 50, 16, 6, 3, 0xf2b5c9), L(33, 50, 38, 56, 1.5, 'p'),
   ] },
-  { id: 'freckles', name: 'Sardinhas', cost: 160, p: OUTLINE, parts: [
+  { id: 'freckles', name: 'Sardinhas', cost: 160, mouth: [A(38, 57, 5, 2, OUTLINE)], p: OUTLINE, parts: [
     A(28, 44, 8, 4, 'p'), A(48, 44, 8, 4, 'p'), C(20, 50, 1.2, 0xb5773a), C(24, 53, 1.2, 0xb5773a), C(52, 50, 1.2, 0xb5773a), C(56, 53, 1.2, 0xb5773a), C(38, 52, 1.2, 0xb5773a),
   ] },
-  { id: 'mustache', name: 'Bigode', cost: 240, p: OUTLINE, parts: [
+  { id: 'mustache', name: 'Bigode', cost: 240, mouth: [A(38, 57, 4, 2, OUTLINE)], p: OUTLINE, parts: [
     C(28, 42, 8, W), C(48, 42, 8, W), C(30, 43, 4, 'p'), C(50, 43, 4, 'p'), T(28, 52, 38, 56, 38, 50, 0x6b4a2e), T(48, 52, 38, 56, 38, 50, 0x6b4a2e),
   ] },
-  { id: 'monsterface', name: 'Monstrinho', cost: 260, p: OUTLINE, parts: [
+  { id: 'monsterface', name: 'Monstrinho', cost: 260, mouth: [L(30, 53, 46, 53, 2.2, OUTLINE)], p: OUTLINE, parts: [
     C(28, 42, 8, W), C(48, 42, 8, W), C(30, 43, 4, 'p'), C(50, 43, 4, 'p'), T(30, 54, 26, 62, 34, 60, W), T(46, 54, 42, 62, 50, 60, W),
   ] },
-  { id: 'stitched', name: 'Costurado', cost: 300, p: OUTLINE, parts: [
+  { id: 'stitched', name: 'Costurado', cost: 300, mouth: [], p: OUTLINE, parts: [
     L(22, 36, 34, 48, 2, 'p'), L(22, 48, 34, 36, 2, 'p'), L(42, 36, 54, 48, 2, 'p'), L(42, 48, 54, 36, 2, 'p'),
     L(30, 56, 46, 56, 2, 'p'), L(32, 53, 32, 59, 1.5, 'p'), L(38, 53, 38, 59, 1.5, 'p'), L(44, 53, 44, 59, 1.5, 'p'),
   ] },
-  { id: 'puppy', name: 'Pidão', cost: 300, p: 0x6b4a2e, parts: [
+  { id: 'puppy', name: 'Pidão', cost: 300, mouth: [A(38, 56, 4, 2, OUTLINE)], p: 0x6b4a2e, parts: [
     C(28, 43, 9, W), C(48, 43, 9, W), C(29, 45, 5.5, 'p'), C(49, 45, 5.5, 'p'), C(27, 42, 1.6, W), C(47, 42, 1.6, W),
   ] },
-  { id: 'sunburn', name: 'Queimado de sol', cost: 180, p: OUTLINE, parts: [
+  { id: 'sunburn', name: 'Queimado de sol', cost: 180, mouth: [A(38, 57, 5, 2, OUTLINE)], p: OUTLINE, parts: [
     A(28, 44, 8, 4, 'p'), A(48, 44, 8, 4, 'p'), C(38, 50, 4, 0xe8483f, 0.8),
   ] },
+  // ---- bocas: mudam só a boca (olhos padrão da skin) ou a expressão inteira
+  { id: 'smile', name: 'Sorriso', cost: 90, mouth: [A(38, 52, 8, 2.6, OUTLINE)] },
+  { id: 'shysmile', name: 'Sorriso tímido', cost: 110, mouth: [A(41, 53, 4, 2, OUTLINE)] },
+  { id: 'bigsmile', name: 'Sorrisão', cost: 200, mouth: [
+    E(38, 56, 10, 6, OUTLINE), R(31, 52, 14, 4, 1.5, W), E(38, 59.5, 5, 2.5, 0xff6b9d),
+  ] },
+  { id: 'grin', name: 'Sorriso maroto', cost: 160, mouth: [L(30, 53, 44, 51, 2.5, OUTLINE), L(44, 51, 47, 49, 2.5, OUTLINE)] },
+  { id: 'smirk', name: 'Sorriso de lado', cost: 150, mouth: [L(32, 54, 42, 52, 2.5, OUTLINE), C(43, 51.5, 1.5, OUTLINE)] },
+  { id: 'pout', name: 'Bico', cost: 140, mouth: [C(38, 54, 3.5, 0xff8fc4), C(38, 54, 2, 0xe8483f, 0.6)] },
+  { id: 'opensmile', name: 'Boca aberta', cost: 180, mouth: [C(38, 55, 6, OUTLINE), C(38, 55, 4.2, 0xff6b9d)] },
+  { id: 'toothygrin', name: 'Dentuço', cost: 240, mouth: [
+    R(28, 50, 20, 8, 3, OUTLINE), R(30, 51, 16, 6, 2, W), L(34, 51, 34, 57, 1.2, OUTLINE), L(38, 51, 38, 57, 1.2, OUTLINE), L(42, 51, 42, 57, 1.2, OUTLINE),
+  ] },
+  { id: 'gaptooth', name: 'Dente falho', cost: 220, mouth: [R(28, 50, 20, 8, 3, OUTLINE), R(30, 51, 7, 6, 1.5, W), R(39, 51, 7, 6, 1.5, W)] },
+  { id: 'goldtooth', name: 'Dente de ouro', cost: 420, mouth: [
+    R(28, 50, 20, 8, 3, OUTLINE), R(30, 51, 16, 6, 2, W), R(38, 51, 4, 6, 1, 0xffd23e), L(34, 51, 34, 57, 1.2, OUTLINE), L(42, 51, 42, 57, 1.2, OUTLINE),
+  ] },
+  { id: 'fangsmile', name: 'Sorriso de presas', cost: 280, mouth: [A(38, 52, 8, 2.6, OUTLINE), T(31, 52, 35, 52, 33, 58, W), T(41, 52, 45, 52, 43, 58, W)] },
+  { id: 'braces', name: 'Aparelho', cost: 260, mouth: [
+    A(38, 52, 8, 2.6, OUTLINE), R(30, 52, 16, 3, 1.5, 0xc8ceda), C(32, 53.5, 1, 0x8d93a8), C(36, 53.5, 1, 0x8d93a8), C(40, 53.5, 1, 0x8d93a8), C(44, 53.5, 1, 0x8d93a8),
+  ] },
+  { id: 'lipstick', name: 'Batom', cost: 300, p: 0xe8483f, mouth: [E(38, 54, 8, 4, 'p'), L(30, 54, 46, 54, 1.2, OUTLINE)] },
+  { id: 'kissy', name: 'Beijoca', cost: 260, mouth: [C(36, 54, 2.6, 0xe8483f), C(40, 54, 2.6, 0xe8483f), T(33.5, 55, 42.5, 55, 38, 60, 0xe8483f)] },
+  { id: 'whistle', name: 'Assobiando', cost: 200, mouth: [C(38, 54, 3, OUTLINE), C(38, 54, 1.6, 0x151233), L(44, 50, 49, 47, 1.5, 0xbfe4ff), L(45, 55, 50, 55, 1.5, 0xbfe4ff)] },
+  { id: 'singing', name: 'Cantando', cost: 260, mouth: [E(38, 55, 5, 6, OUTLINE), E(38, 56, 3, 3.5, 0xff6b9d), L(50, 44, 50, 36, 1.5, OUTLINE), C(48.5, 44, 1.8, OUTLINE)] },
+  { id: 'wobblylip', name: 'Beiço tremendo', cost: 180, mouth: [
+    L(31, 54, 34, 52, 2.2, OUTLINE), L(34, 52, 37, 54, 2.2, OUTLINE), L(37, 54, 40, 52, 2.2, OUTLINE), L(40, 52, 43, 54, 2.2, OUTLINE), L(43, 54, 45, 52, 2.2, OUTLINE),
+  ] },
+  { id: 'drool', name: 'Babão', cost: 170, mouth: [A(38, 52, 7, 2.4, OUTLINE), E(45, 58, 2, 3.5, 0x9fe8ff, 0.9)] },
+  { id: 'gummouth', name: 'Bola de chiclete', cost: 240, mouth: [L(32, 53, 40, 53, 2.2, OUTLINE), C(46, 55, 6, 0xff8fc4, 0.9), C(44, 53, 1.6, W, 0.6)] },
+  { id: 'zippedmouth', name: 'Boca de zíper', cost: 280, mouth: [R(28, 51, 20, 4, 2, 0x8d93a8), L(30, 53, 46, 53, 1, OUTLINE), C(47, 53, 2, 0xffd23e)] },
+  { id: 'stitchedmouth', name: 'Boca costurada', cost: 240, mouth: [L(30, 54, 46, 54, 2.2, OUTLINE), L(33, 51, 33, 57, 1.5, OUTLINE), L(38, 51, 38, 57, 1.5, OUTLINE), L(43, 51, 43, 57, 1.5, OUTLINE)] },
+  { id: 'yawn', name: 'Bocejo', cost: 220, p: OUTLINE, parts: [L(20, 42, 36, 42, 4, 'p'), L(40, 42, 56, 42, 4, 'p')], mouth: [E(38, 56, 5, 7, OUTLINE), E(38, 58, 3, 3.5, 0xff6b9d)] },
 ];
 
 // ---------------------------------------------------------------- ASAS
@@ -749,9 +788,14 @@ export function backParts(cos) {
 export function frontParts(cos) {
   return FRONT_SLOTS.flatMap(s => partsFor(s, cos) || []);
 }
-// null = usar o rosto padrão da skin
+// null = usar os olhos padrão da skin
 export function faceParts(cos) {
   return partsFor('face', cos);
+}
+// Sempre devolve algo: a boca do rosto equipado, ou a padrão.
+export function mouthParts(cos) {
+  const d = itemOf('face', cos?.face);
+  return resolveShapes(d.mouth || DEFAULT_MOUTH, d, cos?.faceTint);
 }
 // Cor que substitui o corpo, ou null para manter a da skin/slot.
 export function bodyColor(cos) {
