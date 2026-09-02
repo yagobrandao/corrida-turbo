@@ -824,13 +824,6 @@ const HOWTO = {
     ['🛠️', 'Boosters ajudam', 'desfazer, embaralhar, dica, remover, bandeja extra'],
     ['🗺️', 'Suba no mapa', 'estrelas, baús, vidas e um desafio novo por dia'],
   ],
-  arena: [
-    ['📱', 'Deite o celular', 'joystick na esquerda, habilidades na direita'],
-    ['🧙', 'Escolha seu herói', '6 classes: tanque, guerreiro, atirador, mago, assassino, suporte'],
-    ['⚔️', 'Mate minions e suba de nível', 'ganhe ouro, compre itens na LOJA e monte sua build'],
-    ['🏰', 'Derrube as torres', 'com a lane aberta, o Core inimigo fica vulnerável'],
-    ['💎', 'Dispute o Cristal Arcano', 'no centro, dá bênção ao time inteiro'],
-  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],

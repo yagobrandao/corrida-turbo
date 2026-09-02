@@ -173,28 +173,6 @@ export const GAMES = [
     load: () => import('./triplequest/TQGame.js'),
   },
   {
-    id: 'arena',
-    name: 'Arena Clash',
-    emoji: '🏟️',
-    tagline: 'Mini MOBA 3v3 na horizontal',
-    description: 'MOBA rápido de 5 a 10 minutos: escolha um dos 6 heróis, suba de nível, compre itens e monte sua build, derrube torres, dispute a jungle e o Cristal Arcano e destrua o Core inimigo. Sozinho contra bots (fácil, médio ou difícil) ou 3v3 com amigos — os bots completam os times. Jogue com o celular deitado.',
-    category: 'estrategia',
-    minPlayers: 1,
-    maxPlayers: 6,
-    accent: '#3ddad7',
-    settings: [{
-      id: 'difficulty',
-      label: 'Bots',
-      default: 'medium',
-      choices: [
-        { id: 'easy', label: 'Fácil', emoji: '🟢', desc: 'Bots lentos e previsíveis' },
-        { id: 'medium', label: 'Médio', emoji: '🟡', desc: 'Bots que usam skills e itens' },
-        { id: 'hard', label: 'Difícil', emoji: '🔴', desc: 'Bots que emboscam e combam' },
-      ],
-    }],
-    load: () => import('./arena/ArenaGame.js'),
-  },
-  {
     id: 'guess',
     name: 'Adivinhe',
     emoji: '🔥',
