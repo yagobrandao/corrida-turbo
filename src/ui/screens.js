@@ -824,6 +824,13 @@ const HOWTO = {
     ['🛠️', 'Boosters ajudam', 'desfazer, embaralhar, dica, remover, bandeja extra'],
     ['🗺️', 'Suba no mapa', 'estrelas, baús, vidas e um desafio novo por dia'],
   ],
+  match: [
+    ['👆', 'Arraste uma fruta', 'para trocar com a vizinha e juntar 3 iguais'],
+    ['🚀', 'Junte 4 ou 5', '4 viram foguete, 5 viram bomba de cor, T ou L vira bomba'],
+    ['💥', 'Troque dois especiais', 'foguete + bomba, cor + foguete… cada dupla tem um efeito'],
+    ['🎯', 'Cumpra o objetivo', 'colete frutas, quebre gelo e caixas, solte correntes'],
+    ['🏝️', 'Estrelas constroem a ilha', 'e todo dia tem recompensa, roda, missões e baús'],
+  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],

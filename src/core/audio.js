@@ -33,7 +33,7 @@ export function setMusic(v) {
   if (!v) stopMusic();
 }
 
-function tone({ freq = 440, dur = 0.15, type = 'square', vol = 0.2, slide = 0, delay = 0 }) {
+export function tone({ freq = 440, dur = 0.15, type = 'square', vol = 0.2, slide = 0, delay = 0 }) {
   if (!prefs.sound) return;
   const c = ensureCtx();
   if (!c) return;
@@ -50,7 +50,7 @@ function tone({ freq = 440, dur = 0.15, type = 'square', vol = 0.2, slide = 0, d
   osc.stop(t0 + dur + 0.02);
 }
 
-function noise({ dur = 0.2, vol = 0.25, delay = 0 }) {
+export function noise({ dur = 0.2, vol = 0.25, delay = 0 }) {
   if (!prefs.sound) return;
   const c = ensureCtx();
   if (!c) return;
