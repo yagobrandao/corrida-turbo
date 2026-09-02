@@ -21,6 +21,22 @@ const BOARD = { x: 20, y: 108, w: GAME_W - 40, h: 520 };
 const TRAY_Y = 690;
 const BOOST_Y = 792;
 
+// Orçamento de profundidade (z-order). O bug de "peça que não sai" e de
+// peças fantasmas por cima de botões vinha daqui: a profundidade de uma
+// peça no tabuleiro somava a camada (0..4) × 40 + a linha (até ~20), o que
+// passava de 190 — acima de QUALQUER botão, painel ou peça voando para a
+// bandeja. Uma peça em camada alta ficava por cima de tudo, inclusive da
+// peça que estava voando por cima dela, dando a impressão de que sumiu ou
+// travou. Agora cada faixa tem um teto baixo e as camadas ficam sempre
+// abaixo de qualquer coisa em movimento ou UI.
+const D = {
+  BOARD: 10,      // + camada (0..4) → 10..14; nunca passa da faixa da UI
+  UI: 20,         // bandeja parada, boosters, textos do topo
+  FLYING: 45,     // peça em voo até a bandeja — sempre visível por cima do tabuleiro
+  FX: 50,         // brilhos, partículas, anel de dica
+  TOAST: 58,
+};
+
 export default class TQScene extends Phaser.Scene {
   constructor() { super('triplequest'); }
 
@@ -34,6 +50,11 @@ export default class TQScene extends Phaser.Scene {
     this.ui = [];          // objetos da tela atual (destruídos ao trocar)
     this.overlay = [];     // painéis por cima (vitória, derrota, perfil...)
     this.mapScroll = 0;
+    // efeitos soltos (confete, faixa de "nível X", toasts) que se destroem
+    // sozinhos com um tween atrasado — se a tela troca antes disso, ficam
+    // caindo por cima da tela nova. Rastreados aqui só pra serem mortos
+    // junto quando qualquer _show*() troca de tela.
+    this.fx = [];
     buildTileTextures(this);
     this._buildUiTextures();
     this._bg();
@@ -103,13 +124,21 @@ export default class TQScene extends Phaser.Scene {
     group.push(sh, r, hi, t);
     return { r, t, setOff: (off) => { r.setData('off', off); [r, t, hi].forEach(o => o.setAlpha(off ? 0.45 : 1)); } };
   }
-  _clear(group) { for (const o of group) o.destroy(); group.length = 0; }
+  // Mata qualquer tween em andamento ANTES de destruir — sem isso, um tween
+  // com repeat:-1 (a decoração do menu, o pulso da fase atual no mapa...)
+  // continua tentando mexer num objeto já destruído, e o Phaser não limpa
+  // isso sozinho. Era a causa real das "peças fantasmas" boiando na tela.
+  _clear(group) {
+    for (const o of group) { this.tweens.killTweensOf(o); o.destroy(); }
+    group.length = 0;
+  }
   _closeOverlay() { this._clear(this.overlay); }
 
   _toast(text, color = '#fff', y = 660) {
     const t = this._text(GAME_W / 2, y, text, 16, color).setDepth(90);
     t.setStyle({ backgroundColor: '#1c2440', padding: { x: 12, y: 6 } });
-    this.tweens.add({ targets: t, y: y - 18, alpha: 0, delay: 900, duration: 500, onComplete: () => t.destroy() });
+    this.fx.push(t);
+    this.tweens.add({ targets: t, y: y - 18, alpha: 0, delay: 900, duration: 500, onComplete: () => { t.destroy(); const i = this.fx.indexOf(t); if (i >= 0) this.fx.splice(i, 1); } });
   }
   _hud(title, sub = '') {
     if (!this.hooks.updateHUD) return;
@@ -127,7 +156,8 @@ export default class TQScene extends Phaser.Scene {
     const colors = [0xe8483f, 0xffd23e, 0x3ddad7, 0x8fe66a, 0xff8fc4, 0x9b59d0];
     for (let i = 0; i < n; i++) {
       const p = this.add.rectangle(Math.random() * GAME_W, -20 - Math.random() * 200, 8, 12, colors[i % colors.length]).setDepth(95).setAngle(Math.random() * 360);
-      this.tweens.add({ targets: p, y: GAME_H + 40, x: p.x + (Math.random() * 120 - 60), angle: p.angle + 540, duration: 1800 + Math.random() * 1400, ease: 'quad.in', onComplete: () => p.destroy() });
+      this.fx.push(p);
+      this.tweens.add({ targets: p, y: GAME_H + 40, x: p.x + (Math.random() * 120 - 60), angle: p.angle + 540, duration: 1800 + Math.random() * 1400, ease: 'quad.in', onComplete: () => { p.destroy(); const i2 = this.fx.indexOf(p); if (i2 >= 0) this.fx.splice(i2, 1); } });
     }
   }
 
@@ -135,7 +165,7 @@ export default class TQScene extends Phaser.Scene {
   // MENU
   // ================================================================
   _showMenu() {
-    this._clear(this.ui); this._closeOverlay(); this._clearBoard();
+    this._clear(this.fx); this._clear(this.ui); this._closeOverlay(); this._clearBoard();
     this.state = 'menu';
     const s = P.summary();
     this._hud('Triple Quest');
@@ -166,7 +196,7 @@ export default class TQScene extends Phaser.Scene {
   // MAPA
   // ================================================================
   _showMap() {
-    this._clear(this.ui); this._closeOverlay(); this._clearBoard();
+    this._clear(this.fx); this._clear(this.ui); this._closeOverlay(); this._clearBoard();
     this.state = 'map';
     const s = P.summary();
     this._hud('Mapa', `fase ${s.level}`);
@@ -212,7 +242,10 @@ export default class TQScene extends Phaser.Scene {
         for (let i = 0; i < 3; i++) node.add(this.add.image(-16 + i * 16, 32, 'tq-fx-star').setScale(0.7).setAlpha(i < st ? 1 : 0.25));
       } else if (!cur) node.add(this.add.image(24, -24, 'tq-locked').setScale(0.6));
       if (chestFor(n) && !done) node.add(this.add.image(-30, -24, 'tq-ui-chest').setScale(0.8));
-      if (cur) this.tweens.add({ targets: disc, scaleX: 1.12, scaleY: 1.12, duration: 600, yoyo: true, repeat: -1, ease: 'sine.inOut' });
+      // `disc` é filho de `world` (que está em this.ui), mas o tween aponta
+      // pra ele diretamente — sem estar em this.ui também, _clear() não
+      // mataria esse tween em loop ao sair do mapa
+      if (cur) { this.tweens.add({ targets: disc, scaleX: 1.12, scaleY: 1.12, duration: 600, yoyo: true, repeat: -1, ease: 'sine.inOut' }); this.ui.push(disc); }
       if (done || cur) {
         disc.setInteractive({ useHandCursor: true });
         disc.on('pointerup', (p) => { if (Math.abs(p.downY - p.upY) < 10) { sfx.click(); this._startLevel(n); } });
@@ -293,7 +326,7 @@ export default class TQScene extends Phaser.Scene {
   }
 
   _play(level, meta) {
-    this._clear(this.ui); this._closeOverlay(); this._clearBoard();
+    this._clear(this.fx); this._clear(this.ui); this._closeOverlay(); this._clearBoard();
     this.state = 'play';
     this.meta = meta;
     this.level = level;
@@ -340,7 +373,7 @@ export default class TQScene extends Phaser.Scene {
     const lockKey = this.add.image(10, 10, 'tq-fx-star').setScale(0.4).setVisible(false);
     const c = this.add.container(x, y, [im, dim, ice, lock, lockKey]).setScale(scale);
     c.setSize(TEX - 6, TEX - 6);
-    c.setDepth(10 + t.layer * 40 + t.gy);
+    c.setDepth(D.BOARD + t.layer);
     Object.assign(c, { tile: t, im, dim, ice, lock, lockKey, baseScale: scale });
     c.setInteractive({ useHandCursor: true });
     c.on('pointerdown', () => this._tap(t));
@@ -349,7 +382,10 @@ export default class TQScene extends Phaser.Scene {
   }
 
   _clearBoard() {
-    for (const v of this.views.values()) v.destroy();
+    // uma peça pode estar no meio do voo até a bandeja (tween pendente) —
+    // mata o tween antes de destruir, senão ele sobrevive apontando para
+    // um objeto morto
+    for (const v of this.views.values()) { this.tweens.killTweensOf(v); v.destroy(); }
     this.views.clear();
     if (this.trayUI) { this._clear(this.trayUI); this.trayUI = null; }
     if (this.boostUI) { this._clear(this.boostUI); this.boostUI = null; }
@@ -397,7 +433,7 @@ export default class TQScene extends Phaser.Scene {
     m.tray.forEach((x, i) => {
       const v = this.views.get(x.id);
       if (!v) return;
-      v.setDepth(30);
+      v.setDepth(D.UI);
       if (animate) this.tweens.add({ targets: v, x: this._slotX(i), y: TRAY_Y, scale, duration: 180, ease: 'quad.out' });
       else v.setPosition(this._slotX(i), TRAY_Y).setScale(scale);
     });
@@ -420,12 +456,12 @@ export default class TQScene extends Phaser.Scene {
     sfx.click();
     const v = this.views.get(t.id);
     v.disableInteractive();
-    v.setDepth(40);
+    v.setDepth(D.FLYING);
     // levanta, cresce e voa para a bandeja
     this.tweens.add({ targets: v, y: v.y - 14, scale: v.baseScale * 1.15, duration: 90, yoyo: false, onComplete: () => {
       this._layoutTray(true);
       this.tweens.add({ targets: v, x: this._slotX(res.at), y: TRAY_Y, scale: (this.slotW - 10) / TEX, duration: 220, ease: 'quad.inOut', onComplete: () => {
-        v.setDepth(30);
+        v.setDepth(D.UI);
         if (res.cleared.length) this._fxTriple(res);
         else this._afterMove();
       } });
@@ -440,7 +476,7 @@ export default class TQScene extends Phaser.Scene {
     const cx = views.reduce((s, v) => s + v.x, 0) / views.length;
     sfx.powerup();
     for (const v of views) {
-      v.setDepth(45);
+      v.setDepth(D.FLYING);
       this.tweens.add({ targets: v, scale: v.scale * 1.35, duration: 110, yoyo: true });
       this.tweens.add({ targets: v, alpha: 0, scale: 0.1, x: cx, delay: 170, duration: 220, ease: 'back.in', onComplete: () => { v.destroy(); this.views.delete(v.tile.id); } });
     }
@@ -453,8 +489,9 @@ export default class TQScene extends Phaser.Scene {
     if (combo >= 2) {
       const label = COMBO_LABELS[Math.min(combo, COMBO_LABELS.length - 1)] + (combo >= 5 ? ` x${combo}` : '');
       const t = this._text(GAME_W / 2, 600, label, 34, ['#ffd23e', '#ff8fc4', '#3ddad7', '#8fe66a'][combo % 4]).setDepth(85).setScale(0.4);
+      this.fx.push(t);
       this.tweens.add({ targets: t, scale: 1, duration: 260, ease: 'back.out' });
-      this.tweens.add({ targets: t, y: 560, alpha: 0, delay: 500, duration: 500, onComplete: () => t.destroy() });
+      this.tweens.add({ targets: t, y: 560, alpha: 0, delay: 500, duration: 500, onComplete: () => { t.destroy(); const i = this.fx.indexOf(t); if (i >= 0) this.fx.splice(i, 1); } });
       sfx.coin();
     }
     this.time.delayedCall(420, () => { this.busy = false; this._layoutTray(true); this._afterMove(); });
@@ -532,7 +569,7 @@ export default class TQScene extends Phaser.Scene {
         if (!t) { this._toast('Nada para desfazer'); return false; }
         const v = this.views.get(t.id);
         const { x, y } = this._tileXY(t);
-        this.tweens.add({ targets: v, x, y, scale: v.baseScale, duration: 240, ease: 'quad.inOut', onComplete: () => { v.setDepth(10 + t.layer * 40 + t.gy); v.setInteractive({ useHandCursor: true }); this._refreshBoard(); } });
+        this.tweens.add({ targets: v, x, y, scale: v.baseScale, duration: 240, ease: 'quad.inOut', onComplete: () => { v.setDepth(D.BOARD + t.layer); v.setInteractive({ useHandCursor: true }); this._refreshBoard(); } });
         this._layoutTray(true);
         return true;
       }
@@ -579,6 +616,14 @@ export default class TQScene extends Phaser.Scene {
   // ---------------------------------------------------------------- fim de fase
   _win() {
     this.state = 'won';
+    this.busy = false;
+    // toques rápidos em sequência perto do fim podem fechar vários trios
+    // quase juntos: o match já está "ganho" (dado é síncrono) antes de
+    // TODAS as animações de voo terminarem. Sem isso, a peça que ainda
+    // estava no ar ficava presa — visível, com o tween nunca completando,
+    // porque a partida seguia em frente sem ela.
+    for (const v of this.views.values()) { this.tweens.killTweensOf(v); v.destroy(); }
+    this.views.clear();
     const m = this.match, meta = this.meta;
     sfx.win();
     this._confetti(46);
@@ -632,14 +677,18 @@ export default class TQScene extends Phaser.Scene {
     sfx.win();
     const t = this._text(GAME_W / 2, 200, `NÍVEL ${lvl}!`, 44, '#ffd23e').setDepth(96).setScale(0.3);
     const s = this._text(GAME_W / 2, 250, '+100 moedas · +1 Dica', 16, '#fff').setDepth(96).setAlpha(0);
+    this.fx.push(t, s);
     this.tweens.add({ targets: t, scale: 1, duration: 400, ease: 'back.out' });
     this.tweens.add({ targets: s, alpha: 1, delay: 300, duration: 300 });
-    this.tweens.add({ targets: [t, s], alpha: 0, delay: 2200, duration: 500, onComplete: () => { t.destroy(); s.destroy(); } });
+    this.tweens.add({ targets: [t, s], alpha: 0, delay: 2200, duration: 500, onComplete: () => { t.destroy(); s.destroy(); this.fx = this.fx.filter(o => o !== t && o !== s); } });
     this._hud(this.meta.kind === 'daily' ? 'Desafio do dia' : `Fase ${this.meta.n}`);
   }
 
   _lose() {
     this.state = 'lost';
+    this.busy = false;
+    for (const v of this.views.values()) { this.tweens.killTweensOf(v); v.destroy(); }
+    this.views.clear();
     const m = this.match;
     sfx.lose();
     const lives = P.loseLife();

@@ -47,10 +47,14 @@ export const COMBO_WINDOW = 2.6;      // segundos entre trios para manter o comb
 // ---------------------------------------------------------------- curva de dificuldade
 // Devolve os parâmetros da fase n (1..∞). Múltiplos de 3 sempre.
 export function levelParams(n) {
-  const tiles = Math.min(126, 12 + 3 * Math.floor(n * 1.15));
-  const types = Math.min(14, Math.max(3, 3 + Math.floor(n / 2)), Math.floor(tiles / 3));
-  const layers = 1 + Math.min(4, Math.floor((n + 2) / 4));
-  const shapes = n <= 3 ? ['pyramid', 'diamond'] : SHAPES;
+  // Curva mais encorpada: a fase 1 já tem peça de sobra pra sentir o jogo
+  // (não são 3 toques e acabou), e o número de TIPOS cresce quase junto
+  // com o de peças — poucos tipos numa fase grande é o que deixa fácil
+  // demais (qualquer toque tem chance alta de combinar).
+  const tiles = Math.min(150, 21 + 5 * Math.floor(n * 1.2));
+  const types = Math.min(16, Math.max(4, 4 + Math.floor(n / 1.8)), Math.floor(tiles / 3));
+  const layers = 1 + Math.min(5, Math.floor((n + 2) / 3));
+  const shapes = n <= 2 ? ['pyramid', 'diamond'] : SHAPES;
   return {
     n, tiles, types, layers,
     shape: shapes[(n * 7 + Math.floor(n / 10) * 3 + 3) % shapes.length],
