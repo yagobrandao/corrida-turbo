@@ -322,7 +322,7 @@ export default class TQScene extends Phaser.Scene {
     const d = P.dailyState();
     if (d.done) { this._toast('Você já venceu o desafio de hoje. Volte amanhã!', '#ffd23e', 720); return; }
     if (P.lives() <= 0) { this._toast('Sem vidas', '#ff6b5e', 720); return; }
-    this._play(dailyLevel(P.todayKey(), DAILY.moves), { kind: 'daily' });
+    this._play(dailyLevel(P.todayKey(), DAILY.movesBuffer), { kind: 'daily' });
   }
 
   _play(level, meta) {

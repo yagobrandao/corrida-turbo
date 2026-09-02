@@ -95,5 +95,5 @@ export const CHESTS = {
   rare: { name: 'Baú raro',  coins: 150, boosters: 1, lives: 0 },
   epic: { name: 'Baú épico', coins: 400, boosters: 2, lives: 1 },
 };
-export const DAILY = { moves: 18, coins: 500, booster: 'hint' };
+export const DAILY = { movesBuffer: 4, coins: 500, booster: 'hint' };
 export const COMBO_LABELS = ['', '', 'NICE!', 'GREAT!', 'AMAZING!', 'COMBO!'];

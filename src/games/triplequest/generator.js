@@ -117,8 +117,8 @@ export function chooseGreedy(frees, tray, tiles) {
 }
 
 // ---------------------------------------------------------------- geração
-export function generateLevel(n, seedIn = null, relax = 0) {
-  const p = levelParams(n);
+export function generateLevel(n, seedIn = null, relax = 0, override = null) {
+  const p = override ? { ...levelParams(n), ...override } : levelParams(n);
   // fase que o resolvedor não fecha: tenta de novo com menos camadas e sem
   // mecânicas especiais (relax cresce a cada tentativa)
   if (relax) { p.layers = Math.max(1, p.layers - relax); p.frozen = 0; p.locked = 0; }
@@ -143,7 +143,7 @@ export function generateLevel(n, seedIn = null, relax = 0) {
     ok = solvable(tiles, TRAY_SIZE);
     if (!ok) for (const t of tiles) { t.frozen = 0; t.locked = null; }
   }
-  if (!ok && relax < 4) return generateLevel(n, seedIn, relax + 1);
+  if (!ok && relax < 4) return generateLevel(n, seedIn, relax + 1, override);
   return { n, seed, shape: p.shape, traySize: TRAY_SIZE, moves: p.moves, tiles, solvable: ok };
 }
 
@@ -179,11 +179,22 @@ function applySpecials(tiles, p, types, rnd) {
   }
 }
 
-// Desafio diário: mesma fase para todo mundo no mesmo dia, com limite de jogadas.
-export function dailyLevel(dateKey, moves) {
+// Desafio diário: mesma fase para todo mundo no mesmo dia, com limite de
+// jogadas igual ao tamanho do tabuleiro (+ folga) — nunca maior, senão é
+// impossível: cada jogada remove exatamente 1 peça, então zerar um
+// tabuleiro de T peças exige no mínimo T jogadas.
+export function dailyLevel(dateKey, movesBuffer = 4) {
   let h = 2166136261;
   for (const ch of dateKey) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
-  const n = 12 + (h >>> 0) % 10;
-  const lv = generateLevel(n, h >>> 0);
-  return { ...lv, n: 'daily', moves, dateKey };
+  h = h >>> 0;
+  const shapeKeys = Object.keys(MASKS);
+  const override = {
+    tiles: 18 + 3 * (h % 4),          // 18, 21, 24 ou 27 peças
+    types: 4 + ((h >>> 4) % 3),       // 4 a 6 tipos
+    layers: 2 + ((h >>> 8) % 2),      // 2 ou 3 camadas
+    shape: shapeKeys[(h >>> 12) % shapeKeys.length],
+    frozen: 0, locked: 0, moves: null,
+  };
+  const lv = generateLevel(0, h, 0, override);
+  return { ...lv, n: 'daily', moves: lv.tiles.length + movesBuffer, dateKey };
 }
