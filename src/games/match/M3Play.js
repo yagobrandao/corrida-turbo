@@ -204,8 +204,9 @@ export default class M3Play extends Phaser.Scene {
     if (!b.pieceAt(cell.r, cell.c)) { this._select(null); return; }
     if (this.sel && Math.abs(this.sel.r - cell.r) + Math.abs(this.sel.c - cell.c) === 1) { const a = this.sel; this._select(null); this._swap(a.r, a.c, cell.r, cell.c); return; }
     this._select(cell);
+    this.drag = null; this._settle();
     const v = this._viewAt(cell.r, cell.c);
-    if (v) v.setDepth(D.FLY);
+    if (v) { this.tweens.killTweensOf(v); v.setDepth(D.FLY); }
     this.drag = { r: cell.r, c: cell.c, x: p.x, y: p.y, id: p.id, v, nb: null, dir: null };
   }
   // A peça segue o dedo (até meia casa) e a vizinha desliza no sentido
@@ -221,22 +222,26 @@ export default class M3Play extends Phaser.Scene {
     const r2 = d.r + dir[0], c2 = d.c + dir[1];
     const nbView = this._viewAt(r2, c2);
     if (d.nb && d.nb !== nbView) { this.tweens.add({ targets: d.nb, x: this._x(d.nbc), y: this._y(d.nbr), duration: 90 }); d.nb = null; }
-    if (nbView) { d.nb = nbView; d.nbr = r2; d.nbc = c2; }
+    if (nbView) { d.nb = nbView; d.nbr = r2; d.nbc = c2; this.tweens.killTweensOf(nbView); }
+    d.amt = amt; d.r2 = r2; d.c2 = c2;
     if (d.v) { d.v.x = this._x(d.c) + dir[1] * amt; d.v.y = this._y(d.r) + dir[0] * amt; d.v.setScale(this.cs / 96 * 1.05); }
     if (d.nb) { d.nb.x = this._x(c2) - dir[1] * amt * 0.6; d.nb.y = this._y(r2) - dir[0] * amt * 0.6; }
-    if (amt >= this.cs * 0.45) {
-      this.drag = null; this._select(null);
-      if (d.v) d.v.setScale(this.cs / 96 * 0.94);
-      this._swap(d.r, d.c, r2, c2);
-    }
+    if (amt >= this.cs * 0.5) this._commitDrag(d);   // deslize decidido: completa sem soltar
+  }
+  _commitDrag(d) {
+    this.drag = null; this._select(null);
+    if (d.v) d.v.setScale(this.cs / 96 * 0.94);
+    this._swap(d.r, d.c, d.r2, d.c2);
   }
   _up(p) {
     const d = this.drag;
     if (!d || p.id !== d.id) return;
     this.drag = null;
+    // soltou depois de 30% da casa: confirma a troca
+    if (d.amt >= this.cs * 0.3 && d.r2 !== undefined && !this.busy) { this._commitDrag(d); return; }
     // não completou: volta suave para o lugar
-    if (d.v) { this.tweens.add({ targets: d.v, x: this._x(d.c), y: this._y(d.r), scale: this.cs / 96 * 0.94, duration: 140, ease: 'Back.out', onComplete: () => d.v.setDepth(D.PIECE + d.r) }); }
-    if (d.nb) this.tweens.add({ targets: d.nb, x: this._x(d.nbc), y: this._y(d.nbr), duration: 140, ease: 'Back.out' });
+    if (d.v) { this.tweens.killTweensOf(d.v); this.tweens.add({ targets: d.v, x: this._x(d.c), y: this._y(d.r), scale: this.cs / 96 * 0.94, duration: 140, ease: 'Back.out', onComplete: () => { d.v.setDepth(D.PIECE + d.r); } }); }
+    if (d.nb) { this.tweens.killTweensOf(d.nb); this.tweens.add({ targets: d.nb, x: this._x(d.nbc), y: this._y(d.nbr), duration: 140, ease: 'Back.out' }); }
   }
   _select(cell) {
     if (this.selView) { this.selView.destroy(); this.selView = null; }
@@ -260,6 +265,7 @@ export default class M3Play extends Phaser.Scene {
       for (const ph of phases) await this._phase(ph);
       while (this.queue && this.queue.length) { const q = this.queue; this.queue = []; for (const ph of q) await this._phase(ph); }
     } finally { this.busy = false; }
+    this._settle();
     this._refreshHud();
     this._refreshBoosters();
     this.comboPitch = 0;
@@ -275,6 +281,7 @@ export default class M3Play extends Phaser.Scene {
       const va = this._viewAt(ph.a.r, ph.a.c), vb = this._viewAt(ph.b.r, ph.b.c);
       if (!va || !vb) return;
       sfx.lane();
+      this.tweens.killTweensOf(va); this.tweens.killTweensOf(vb);
       va.setDepth(D.FLY);
       const sc0 = this.cs / 96 * 0.94;
       await Promise.all([tweenP(this, { targets: va, x: this._x(ph.b.c), y: this._y(ph.b.r), scale: sc0 * 1.08, duration: 200, ease: 'Quad.out' }), tweenP(this, { targets: vb, x: this._x(ph.a.c), y: this._y(ph.a.r), duration: 200, ease: 'Quad.out' })]);
@@ -324,7 +331,7 @@ export default class M3Play extends Phaser.Scene {
     if (ph.t === 'fall') {
       // queda com aceleração (gravidade) e um quique curto ao pousar
       const tw = [];
-      const drop = (v, toY, dist) => tweenP(this, { targets: v, y: toY, duration: 140 + Math.sqrt(dist) * 95, ease: 'Quad.in' }).then(() => tweenP(this, { targets: v, scaleY: v.scaleX * 0.86, scaleX: v.scaleX * 1.08, duration: 60, yoyo: true, ease: 'Sine.out' }));
+      const drop = (v, toY, dist) => { this.tweens.killTweensOf(v); v.setScale(this.cs / 96 * 0.94); return tweenP(this, { targets: v, y: toY, duration: 140 + Math.sqrt(dist) * 95, ease: 'Quad.in' }).then(() => tweenP(this, { targets: v, scaleY: v.scaleX * 0.86, scaleX: v.scaleX * 1.08, duration: 60, yoyo: true, ease: 'Sine.out' })); };
       for (const m of ph.moves) { const v = this.views.get(m.id); if (!v) continue; v.setDepth(D.PIECE + m.to.r); tw.push(drop(v, this._y(m.to.r), m.to.r - m.from.r)); }
       for (const s of ph.spawns) { const v = this._makePiece({ id: s.id, c: s.color, s: null }, s.r, s.c, this._y(s.fromRow)); tw.push(drop(v, this._y(s.r), s.r - s.fromRow)); }
       await Promise.all(tw);
@@ -334,7 +341,7 @@ export default class M3Play extends Phaser.Scene {
     if (ph.t === 'shuffle') {
       sfx.slide();
       const tw = [];
-      for (const s of ph.pieces) { const v = this.views.get(s.id); if (!v) continue; tw.push(tweenP(this, { targets: v, scale: 0, angle: 180, duration: 180 }).then(() => { v.setTexture(this._tex({ c: s.color, s: b.pieceAt(s.r, s.c) && b.pieceAt(s.r, s.c).s })); return tweenP(this, { targets: v, scale: sc, angle: 360, duration: 220, ease: 'Back.out' }); }).then(() => v.setAngle(0))); }
+      for (const s of ph.pieces) { const v = this.views.get(s.id); if (!v) continue; this.tweens.killTweensOf(v); tw.push(tweenP(this, { targets: v, scale: 0, angle: 180, duration: 180 }).then(() => { v.setTexture(this._tex({ c: s.color, s: b.pieceAt(s.r, s.c) && b.pieceAt(s.r, s.c).s })); return tweenP(this, { targets: v, scale: sc, angle: 360, duration: 220, ease: 'Back.out' }); }).then(() => v.setAngle(0))); }
       await Promise.all(tw);
       return;
     }
@@ -359,6 +366,23 @@ export default class M3Play extends Phaser.Scene {
     }
   }
   _viewAt(r, c) { const p = this.board.pieceAt(r, c); return p ? this.views.get(p.id) : null; }
+  // Rede de segurança: a tela é sempre reconciliada com o tabuleiro quando
+  // nada está animando. Cria o que falta, destrói o que sobra, põe cada
+  // fruta na casa certa e devolve o pulso aos especiais.
+  _settle() {
+    if (this.busy || this.drag) return;
+    const b = this.board, sc = this.cs / 96 * 0.94, alive = new Set();
+    for (const p of b._allPieces()) {
+      alive.add(p.piece.id);
+      let v = this.views.get(p.piece.id);
+      if (!v) v = this._makePiece(p.piece, p.r, p.c);
+      this.tweens.killTweensOf(v);
+      v.setPosition(this._x(p.c), this._y(p.r)).setScale(sc).setAngle(0).setAlpha(1).setDepth(D.PIECE + p.r);
+      const tex = this._tex(p.piece); if (v.texture.key !== tex) v.setTexture(tex);
+      if (p.piece.s) this._specialIdle(v);
+    }
+    for (const [id, v] of this.views) if (!alive.has(id)) { this.tweens.killTweensOf(v); v.destroy(); this.views.delete(id); }
+  }
 
   // ---------------------------------------------------------------- efeitos
   _effect(e) {
