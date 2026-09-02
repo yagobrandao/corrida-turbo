@@ -58,6 +58,12 @@ export const METRICS = {
   battleThree:   (ev) => g(ev, 'battle', 'threeStars'),
   battleBoss:    (ev) => g(ev, 'battle', 'boss'),
   battlePvpWon:  (ev) => g(ev, 'battle', 'pvpWon'),
+
+  tqLevel:       (ev) => g(ev, 'triplequest', 'level'),
+  tqLevels:      (ev) => g(ev, 'triplequest', 'levels'),
+  tqThree:       (ev) => g(ev, 'triplequest', 'three'),
+  tqCombo:       (ev) => g(ev, 'triplequest', 'combo'),
+  tqTriples:     (ev) => g(ev, 'triplequest', 'triples'),
 };
 
 // ------------------------------------------------------------------
@@ -85,6 +91,7 @@ export const DAILY_POOL = [
   D('d_score1k',  '⭐', 'Faça 1.000 pontos numa partida',  'score',        1000, 80, 'best'),
   D('d_td8',      '🏰', 'Chegue à onda 8 no Torre & Cerco', 'tdWave',      8,   90, 'best'),
   D('d_bt5',      '⚔️', 'Chegue à rodada 5 no Battle Tactics', 'battleRound', 5, 90, 'best'),
+  D('d_tq3',      '🧩', 'Passe 3 fases no Triple Quest',     'tqLevels',     3,  90),
   D('d_td60',     '⚔️', 'Derrote 60 inimigos defendendo',   'tdKills',     60,  70),
   D('d_isl40',    '🏝️', 'Colete 40 recursos na ilha',       'islandGather', 40, 80),
 ];
@@ -127,6 +134,11 @@ export const ACHIEVEMENTS = [
   A('a_btboss',   '👑', 'Quebra-pedra',       'Derrote o Ancião de Pedra',         'battleBoss',     1, 400, 'best'),
   A('a_btwins',   '⚔️', 'General',            'Vença 3 corridas do Battle Tactics', 'battleWon',      3, 500),
   A('a_btpvp',    '🤺', 'Duelista',           'Vença um amigo no Battle Tactics',  'battlePvpWon',   1, 350),
+  A('a_tqfirst',  '🧩', 'Primeiro trio',      'Forme seu primeiro trio no Triple Quest', 'tqTriples', 1,  50),
+  A('a_tqcombo',  '💥', 'Combo master',       'Faça um combo x5 no Triple Quest',  'tqCombo',        5, 300, 'best'),
+  A('a_tqperf',   '🌟', 'Perfeccionista',     'Consiga 3 estrelas em 10 fases',    'tqThree',       10, 350),
+  A('a_tq50',     '🗺️', 'Colecionador',       'Complete 50 fases do Triple Quest', 'tqLevel',       50, 500, 'best'),
+  A('a_tq100',    '👑', 'Mestre dos tiles',   'Complete 100 fases do Triple Quest','tqLevel',      100, 800, 'best'),
   A('a_streak3',  '🔥', 'Três dias',          'Jogue em 3 dias diferentes',        '__streak',      3, 250),
   A('a_streak7',  '📅', 'Semana cheia',       'Jogue em 7 dias diferentes',        '__streak',      7, 600),
   A('a_full4',    '🎉', 'Sala cheia',         'Jogue numa sala com 4 jogadores',   'fullRoom',      1, 300),

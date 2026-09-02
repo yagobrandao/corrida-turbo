@@ -817,6 +817,13 @@ const HOWTO = {
     ['🔗', 'Combine facções e classes', 'sinergias deixam o time inteiro mais forte'],
     ['⚔️', 'Toque em LUTAR', 'eles lutam sozinhos; sobreviva 10 rodadas e vença o chefe'],
   ],
+  triplequest: [
+    ['👆', 'Toque numa peça livre', 'as tampadas ficam escuras até liberar'],
+    ['📦', 'Ela vai para a bandeja', 'só cabem 7 — encheu, perdeu'],
+    ['✨', 'Três iguais somem', 'trios seguidos fazem combo e rendem mais'],
+    ['🛠️', 'Boosters ajudam', 'desfazer, embaralhar, dica, remover, bandeja extra'],
+    ['🗺️', 'Suba no mapa', 'estrelas, baús, vidas e um desafio novo por dia'],
+  ],
   guess: [
     ['⌨️', 'Digite uma palavra', 'qualquer palpite vale'],
     ['🌡️', 'O jogo diz o quanto', 'você chegou perto do significado'],

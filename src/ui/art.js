@@ -225,6 +225,22 @@ const ARTS = {
     <path d="M22 88 l2 4 l4 .7 l-3 3 l.7 4 l-3.7 -2 l-3.7 2 l.7 -4 l-3 -3 l4 -.7 Z" fill="#ffd23e" opacity=".7"/>
   `, 'battle'),
 
+  triplequest: (a) => thumbWrap(a, `
+    <ellipse cx="80" cy="104" rx="70" ry="14" fill="#000" opacity=".18"/>
+    <g transform="translate(20 72) rotate(-8)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#e8483f" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(52 78) rotate(4)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#2b7fd4" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(84 74) rotate(-3)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#ffd23e" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(116 80) rotate(6)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#3fae70" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(148 72) rotate(-5)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#d45de0" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(36 48) rotate(-6)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#ff8b3d" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(68 44) rotate(5)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#3ddad7" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(100 48) rotate(-4)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#ff8fc4" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(132 44) rotate(7)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#9b59d0" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(68 20) rotate(-4)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#ffd23e" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <g transform="translate(100 18) rotate(5)"><rect x="-15" y="-13" width="30" height="30" rx="7" fill="#000" opacity=".22"/><rect x="-16" y="-16" width="32" height="32" rx="7" fill="${OUTLINE}"/><rect x="-14" y="-14" width="28" height="28" rx="6" fill="#fdf7ec"/><circle r="7" fill="#e8483f" stroke="${OUTLINE}" stroke-width="2"/></g>
+    <path d="M132 14 l3 6 l6 1 l-4.5 4 l1 6 l-5.5 -3 l-5.5 3 l1 -6 l-4.5 -4 l6 -1 Z" fill="#ffd23e"/>
+  `, 'triplequest'),
+
   guess: (a) => thumbWrap(a, `
     <g transform="translate(80 34)">
       <rect x="-34" y="-22" width="68" height="42" rx="12" fill="#fff"/>

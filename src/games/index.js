@@ -26,6 +26,7 @@ export const CATEGORIES = [
   { id: 'arcade', name: 'Arcade' },
   { id: 'party',  name: 'Party' },
   { id: 'estrategia', name: 'Estratégia' },
+  { id: 'puzzle', name: 'Puzzle' },
 ];
 
 // As opções ficam no manifesto (e não dentro do jogo) porque a tela de criar
@@ -157,6 +158,19 @@ export const GAMES = [
     maxPlayers: 2,
     accent: '#c9302a',
     load: () => import('./autobattler/BattleGame.js'),
+  },
+  {
+    id: 'triplequest',
+    name: 'Triple Quest',
+    emoji: '🧩',
+    tagline: 'Junte 3 iguais e limpe o tabuleiro',
+    description: 'Peças empilhadas em camadas: toque nas que estão livres para levá-las à bandeja, junte três iguais para sumirem e limpe tudo antes da bandeja encher. Mapa de fases, estrelas, combos, boosters, baús, vidas e desafio do dia.',
+    category: 'puzzle',
+    minPlayers: 1,
+    maxPlayers: 1,
+    soloOnly: true,
+    accent: '#ff8fc4',
+    load: () => import('./triplequest/TQGame.js'),
   },
   {
     id: 'guess',
