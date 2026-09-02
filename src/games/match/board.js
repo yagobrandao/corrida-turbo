@@ -30,10 +30,11 @@ export class Board {
       const line = (level.layout && level.layout[r]) || '.'.repeat(this.cols);
       for (let c = 0; c < this.cols; c++) {
         const ch = line[c] || '.';
-        row.push({ piece: null, ice: ch === 'i' ? 1 : ch === 'I' ? 2 : 0, box: ch === 'b' ? 1 : ch === 'B' ? 2 : 0, stone: ch === 'X', chain: ch === 'c' });
+        row.push({ piece: null, ice: ch === 'i' ? 1 : ch === 'I' ? 2 : 0, box: ch === 'b' ? 1 : ch === 'B' ? 2 : 0, stone: ch === 'X' || ch === 'G', gen: ch === 'G', chain: ch === 'c', honey: ch === 'h' });
       }
       this.grid.push(row);
     }
+    this.movesMade = 0;
     this._fill();
     // boosters pré-fase: especiais já no tabuleiro
     for (const s of level.seedSpecials || []) {
@@ -82,7 +83,7 @@ export class Board {
     for (let i = r + 1; i < this.rows && this.pieceAt(i, c) && this.pieceAt(i, c).c === p.c; i++) v++;
     return h >= 3 || v >= 3;
   }
-  _canMove(r, c) { const x = this.cell(r, c); return x && x.piece && !x.chain; }
+  _canMove(r, c) { const x = this.cell(r, c); return x && x.piece && !x.chain && !x.honey; }
   _swapValid(r1, c1, r2, c2) {
     const a = this.pieceAt(r1, c1), b = this.pieceAt(r2, c2);
     if (a.s === 'color' || b.s === 'color') return true;
@@ -120,7 +121,9 @@ export class Board {
     if (a.s && b.s) trig.push({ kind: 'combo', r: r1, c: c1, a, b, r2, c2 });
     else if (a.s === 'color') trig.push({ kind: 'colorSwap', r: r1, c: c1, color: b.c });
     else if (b.s === 'color') trig.push({ kind: 'colorSwap', r: r2, c: c2, color: a.c });
+    this.honeyCleared = false; this.movesMade++;
     this._resolve(phases, { r: r1, c: c1, r2, c2 }, trig);
+    this._afterMove(phases);
     return { ok: true, phases };
   }
 
@@ -177,13 +180,14 @@ export class Board {
       this.bestCombo = Math.max(this.bestCombo, this.combo);
       this.stats.cascadeMax = Math.max(this.stats.cascadeMax, this.combo);
       const removed = new Map();       // key -> {r,c,piece,bySpecial}
-      const effects = [], created = [], boxesHit = new Set(), chainsHit = new Set();
+      const effects = [], created = [], boxesHit = new Set(), chainsHit = new Set(), honeyHit = new Set();
       const queue = [];                // especiais a ativar {r,c,piece}
       const mark = (r, c, bySpecial) => {
         const cell = this.cell(r, c); if (!cell) return;
         if (cell.box) { boxesHit.add(key(r, c)); return; }
         if (!cell.piece || removed.has(key(r, c))) return;
         if (cell.chain) { chainsHit.add(key(r, c)); if (!bySpecial) return; cell.chain = false; }
+        if (cell.honey) { honeyHit.add(key(r, c)); if (!bySpecial) return; cell.honey = false; }
         removed.set(key(r, c), { r, c, piece: cell.piece, bySpecial });
         if (cell.piece.s) queue.push({ r, c, piece: cell.piece });
       };
@@ -238,15 +242,26 @@ export class Board {
         if (x.bySpecial) { this._collect(x.piece.c, 1); const cell = this.cell(x.r, x.c); if (cell.ice) { cell.ice--; this._objIce(1); effects.push({ kind: 'ice', r: x.r, c: x.c, left: cell.ice }); } }
         for (const [dr, dc] of DIRS) { const n = this.cell(x.r + dr, x.c + dc); if (n && n.box) boxesHit.add(key(x.r + dr, x.c + dc)); }
         gain += (SCORE.piece + (x.bySpecial ? SCORE.specialPiece : 0)) * mult;
-        this.cell(x.r, x.c).piece = null;
+        const cellNow = this.cell(x.r, x.c);
+        if (cellNow.piece && cellNow.piece.id === x.piece.id) cellNow.piece = null;
       }
       const boxes = [];
       for (const k of boxesHit) { const r = Math.floor(k / 32), c = k % 32; const cell = this.grid[r][c]; if (!cell.box) continue; cell.box--; this._objBox(1); boxes.push({ r, c, left: cell.box }); gain += 30 * mult; }
       const chains = [];
       for (const k of chainsHit) { const r = Math.floor(k / 32), c = k % 32; const cell = this.grid[r][c]; if (cell.chain) { cell.chain = false; } chains.push({ r, c }); this._objChain(1); gain += 20 * mult; }
+      const honey = [];
+      for (const k of honeyHit) { const r = Math.floor(k / 32), c = k % 32; const cell = this.grid[r][c]; if (cell.honey) cell.honey = false; honey.push({ r, c }); this._objHoney(1); gain += 25 * mult; this.honeyCleared = true; }
       this.score += gain;
       this._objScore();
-      phases.push({ t: 'clear', pieces: [...removed.values()].map(x => ({ id: x.piece.id, r: x.r, c: x.c, color: x.piece.c, s: x.piece.s, bySpecial: x.bySpecial })), boxes, chains, ice: effects.filter(e => e.kind === 'ice'), effects: effects.filter(e => e.kind !== 'ice'), created, score: gain, combo: this.combo, total: this.score, objectives: this.objectives.map(o => o.got) });
+      // um especial criado e destruído no MESMO passo nunca chega à tela:
+      // sai das duas listas (a cena destruiria antes de criar e ficaria um fantasma)
+      const createdIds = new Set(created.map(x => x.id));
+      const piecesOut = [...removed.values()].filter(x => !createdIds.has(x.piece.id));
+      const createdOut = created.filter(x => { const rm = removed.get(key(x.r, x.c)); return !(rm && rm.piece.id === x.id); });
+      // ...mas a peça que ele substituiu (prev) precisa sumir da tela mesmo assim
+      const piecesList = piecesOut.map(x => ({ id: x.piece.id, r: x.r, c: x.c, color: x.piece.c, s: x.piece.s, bySpecial: x.bySpecial }));
+      for (const x of created) if (!createdOut.includes(x) && x.prev !== undefined) piecesList.push({ id: x.prev, r: x.r, c: x.c, color: x.color, s: null, bySpecial: true });
+      phases.push({ t: 'clear', pieces: piecesList, boxes, chains, honey, ice: effects.filter(e => e.kind === 'ice'), effects: effects.filter(e => e.kind !== 'ice'), created: createdOut, score: gain, combo: this.combo, total: this.score, objectives: this.objectives.map(o => o.got) });
 
       // 5) gravidade + reposição
       this._gravity(phases);
@@ -260,10 +275,31 @@ export class Board {
     }
   }
 
+  // depois de cada jogada: mel espalha se nenhum foi destruído; gerador
+  // acorrenta uma vizinha a cada 3 jogadas
+  _afterMove(phases) {
+    if (this.over) return;
+    const spread = [];
+    const honeyCells = []; for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) if (this.grid[r][c].honey) honeyCells.push({ r, c });
+    if (honeyCells.length && !this.honeyCleared) {
+      const cands = [];
+      for (const h of honeyCells) for (const [dr, dc] of DIRS) { const n = this.cell(h.r + dr, h.c + dc); if (n && n.piece && !n.honey && !n.chain && !n.piece.s) cands.push({ r: h.r + dr, c: h.c + dc }); }
+      if (cands.length) { const p = cands[Math.floor(this.rnd() * cands.length)]; this.grid[p.r][p.c].honey = true; spread.push({ kind: 'honey', r: p.r, c: p.c }); for (const o of this.objectives) if (o.type === 'honey') o.n++; }
+    }
+    if (this.movesMade % 3 === 0) for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
+      if (!this.grid[r][c].gen) continue;
+      const cands = []; for (const [dr, dc] of DIRS) { const n = this.cell(r + dr, c + dc); if (n && n.piece && !n.chain && !n.honey && !n.piece.s) cands.push({ r: r + dr, c: c + dc }); }
+      if (cands.length) { const p = cands[Math.floor(this.rnd() * cands.length)]; this.grid[p.r][p.c].chain = true; spread.push({ kind: 'chain', r: p.r, c: p.c }); for (const o of this.objectives) if (o.type === 'chain') o.n++; }
+    }
+    if (spread.length) phases.push({ t: 'spread', list: spread });
+    if (!this.findMove()) { phases.push({ t: 'noMoves' }); this._shuffle(phases); this._resolve(phases, null, []); }
+  }
+
   _collect(color, n) { for (const o of this.objectives) if (o.type === 'collect' && o.color === color) o.got = Math.min(o.n, o.got + n); }
   _objIce(n) { for (const o of this.objectives) if (o.type === 'ice') o.got = Math.min(o.n, o.got + n); }
   _objBox(n) { for (const o of this.objectives) if (o.type === 'box') o.got = Math.min(o.n, o.got + n); }
   _objChain(n) { for (const o of this.objectives) if (o.type === 'chain') o.got = Math.min(o.n, o.got + n); }
+  _objHoney(n) { for (const o of this.objectives) if (o.type === 'honey') o.got = Math.min(o.n, o.got + n); }
   _objScore() { for (const o of this.objectives) if (o.type === 'score') o.got = Math.min(o.n, this.score); }
 
   // grupos: linhas ≥3 (h e v) unidas por célula compartilhada
@@ -353,13 +389,13 @@ export class Board {
         let src = -1;
         for (let k = r - 1; k >= 0; k--) { const cell = this.grid[k][c]; if (cell.stone || cell.box) break; if (cell.piece) { src = k; break; } }
         if (src >= 0) {
-          if (this.grid[src][c].chain) continue;          // peça acorrentada não cai
+          if (this.grid[src][c].chain || this.grid[src][c].honey) continue;   // presa não cai
           const p = this.grid[src][c].piece; this.grid[src][c].piece = null; this.grid[r][c].piece = p;
           moves.push({ id: p.id, from: { r: src, c }, to: { r, c } });
         } else {
           // só nasce se o caminho até o topo está livre
           let open = true;
-          for (let k = r - 1; k >= 0; k--) { const cell = this.grid[k][c]; if (cell.box || cell.chain) { open = false; break; } }
+          for (let k = r - 1; k >= 0; k--) { const cell = this.grid[k][c]; if (cell.box || cell.chain || cell.honey) { open = false; break; } }
           if (!open) continue;
           const p = this._newPiece(this._randColor());
           this.grid[r][c].piece = p; spawnCount++;

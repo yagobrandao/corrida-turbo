@@ -11,6 +11,7 @@ const O = {
   ice: (n) => ({ type: 'ice', n }),
   box: (n) => ({ type: 'box', n }),
   chain: (n) => ({ type: 'chain', n }),
+  honey: (n) => ({ type: 'honey', n }),
 };
 // gabaritos de layout: função (r, c, rows, cols) -> caractere
 const L = {
@@ -29,6 +30,11 @@ const L = {
   chainIce: (r, c, R) => ((r * 3 + c * 5) % 8 === 0 && r > 0) ? 'c' : r >= R - 3 ? 'i' : '.',
   chainRow: (r, c, R) => r === Math.floor(R / 2) ? 'c' : '.',
   boxChain: (r, c, R) => r === R - 1 ? 'b' : ((r + c) % 4 === 0 && r > 0 && r < R - 2) ? 'c' : '.',
+  honey: (r, c, R, C) => (r === R - 2 && (c === 1 || c === C - 2)) ? 'h' : '.',
+  honeyIce: (r, c, R, C) => (r === Math.floor(R / 2) && (c === 1 || c === C - 2)) ? 'h' : r >= R - 2 ? 'i' : '.',
+  gen: (r, c, R, C) => (r === R - 1 && (c === 0 || c === C - 1)) ? 'G' : '.',
+  genIce: (r, c, R, C) => (r === R - 1 && c === Math.floor(C / 2)) ? 'G' : (r >= R - 3 && r < R - 1) ? 'i' : '.',
+  genHoney: (r, c, R, C) => (r === 0 && (c === 0 || c === C - 1)) ? 'G' : (r === R - 2 && c === Math.floor(C / 2)) ? 'h' : '.',
   everything: (r, c, R) => r === R - 1 ? 'b' : r >= R - 4 ? 'i' : ((r * 3 + c * 5) % 9 === 0 && r > 0) ? 'c' : '.',
 };
 const layout = (fn, rows, cols) => Array.from({ length: rows }, (_, r) => Array.from({ length: cols }, (_, c) => fn(r, c, rows, cols)).join(''));
@@ -66,27 +72,33 @@ const HAND = [
 
 function build(n, cols, rows, colors, moves, objs, fn, tutorial) {
   const lay = layout(fn, rows, cols);
-  const objectives = objs.map(o => o === 'ice' ? O.ice(count(lay, 'i') + count(lay, 'I') * 2) : o === 'box' ? O.box(count(lay, 'b') + count(lay, 'B') * 2) : o === 'chain' ? O.chain(count(lay, 'c')) : o);
+  const objectives = objs.map(o => o === 'ice' ? O.ice(count(lay, 'i') + count(lay, 'I') * 2) : o === 'box' ? O.box(count(lay, 'b') + count(lay, 'B') * 2) : o === 'chain' ? O.chain(count(lay, 'c')) : o === 'honey' ? O.honey(count(lay, 'h')) : o);
   return { n, cols, rows, colors, moves, objectives, layout: lay, tutorial, region: regionFor(n).id, seed: (n * 2654435761 + 12345) >>> 0 };
 }
 
 // ---------------------------------------------------------------- gerador (n > 25)
+// gabaritos por faixa: mel entra na 26, gerador na 41
 const GEN_LAYOUTS = [L.full, L.corners, L.diamond, L.icePatches, L.iceBand, L.iceCenter, L.boxBottom, L.boxPillars, L.boxIce, L.chains, L.chainIce, L.boxChain, L.everything, L.iceHeavy, L.boxHeavy, L.chainRow];
+const HONEY_LAYOUTS = [L.honey, L.honeyIce];
+const GEN2_LAYOUTS = [L.gen, L.genIce, L.genHoney];
 function generate(n) {
   const h = (n * 2654435761) >>> 0;
   const cols = 8, rows = n % 4 === 0 ? 9 : 8;
   const colors = n < 40 ? 5 : 6;
-  const fn = GEN_LAYOUTS[(h >>> 3) % GEN_LAYOUTS.length];
+  const pool = n >= 41 ? [...GEN_LAYOUTS, ...HONEY_LAYOUTS, ...GEN2_LAYOUTS] : n >= 26 ? [...GEN_LAYOUTS, ...HONEY_LAYOUTS] : GEN_LAYOUTS;
+  const fn = (n === 26 || n === 27) ? L.honey : n === 41 ? L.gen : pool[(h >>> 3) % pool.length];
   const lay = layout(fn, rows, cols);
   const objs = [];
-  const hasIce = count(lay, 'iI') > 0, hasBox = count(lay, 'bB') > 0, hasChain = count(lay, 'c') > 0;
-  if (hasIce) objs.push('ice'); if (hasBox) objs.push('box'); if (hasChain) objs.push('chain');
+  const hasIce = count(lay, 'iI') > 0, hasBox = count(lay, 'bB') > 0, hasChain = count(lay, 'c') > 0, hasHoney = count(lay, 'h') > 0, hasGen = count(lay, 'G') > 0;
+  if (hasIce) objs.push('ice'); if (hasBox) objs.push('box'); if (hasChain) objs.push('chain'); if (hasHoney) objs.push('honey'); if (hasGen && !hasChain) objs.push(O.chain(3));
   const kind = (h >>> 8) % 3;
   if (!objs.length || kind === 0) objs.push(O.collect((h >>> 12) % colors, 14 + Math.min(20, Math.floor(n / 4))));
   if (kind === 1 && objs.length < 2) objs.push(O.collect(((h >>> 12) + 3) % colors, 12 + Math.min(16, Math.floor(n / 5))));
   if (kind === 2 && objs.length < 2) objs.push(O.score(8000 + n * 250));
   const moves = 24 + Math.min(10, Math.floor(n / 12));
-  return build(n, cols, rows, colors, moves, objs.slice(0, 3), fn, null);
+  const lv = build(n, cols, rows, colors, moves, objs.slice(0, 3), fn, null);
+  lv.tutorial = n === 26 ? 'honey' : n === 41 ? 'gen' : null;
+  return lv;
 }
 
 // ---------------------------------------------------------------- validador
@@ -115,7 +127,7 @@ function botPlay(level, seed) {
       for (const g of groups) { s += g.cells.length; if (g.special) s += g.special === 'color' ? 8 : g.special === 'bomb' ? 5 : 3; for (const o of b.objectives) if (o.type === 'collect' && o.color === g.color && o.got < o.n) s += g.cells.length; }
       const pa = b.pieceAt(m.r1, m.c1), pb = b.pieceAt(m.r2, m.c2);
       if (pa && pb && pa.s && pb.s) s += 14; else if ((pa && pa.s === 'color') || (pb && pb.s === 'color')) s += 10;
-      for (const x of [[m.r1, m.c1], [m.r2, m.c2]]) { const cell = b.cell(x[0], x[1]); if (cell.ice) s += 2; }
+      for (const x of [[m.r1, m.c1], [m.r2, m.c2]]) { const cell = b.cell(x[0], x[1]); if (cell.ice) s += 2; for (const [dr, dc] of [[0, 1], [1, 0], [0, -1], [-1, 0]]) { const nb = b.cell(x[0] + dr, x[1] + dc); if (nb && (nb.honey || nb.chain)) s += 3; } }
       b._swap(m.r1, m.c1, m.r2, m.c2);
       s += b.rnd() * 1.5;
       if (s > bestScore) { bestScore = s; best = m; }

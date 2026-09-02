@@ -15,6 +15,7 @@ export const FRUITS = [
   { id: 'laranja', name: 'Laranja', c: 0xff8b3d, c2: 0xffc48a, shape: 'wedge' },
   { id: 'mirtilo', name: 'Mirtilo', c: 0x2b7fd4, c2: 0x9fe8ff, shape: 'berry' },
 ];
+export const OBSTACLES = { ice: 'Gelo', box: 'Caixa', chain: 'Corrente', honey: 'Mel', gen: 'Gerador' };
 export const SPECIALS = {
   rh: { name: 'Foguete', desc: 'Limpa a linha inteira' },
   rv: { name: 'Foguete', desc: 'Limpa a coluna inteira' },

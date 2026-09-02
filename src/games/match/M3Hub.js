@@ -10,7 +10,7 @@ import * as P from './progress.js';
 const FONT = 'Fredoka, "Baloo 2", Arial, sans-serif';
 const fmt = (n) => Math.round(n).toLocaleString('pt-BR');
 const mmss = (ms) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
-const MAP_LEVELS = 60;
+const MAP_LEVELS = 90;
 
 export default class M3Hub extends Phaser.Scene {
   constructor() { super('m3hub'); }
@@ -133,8 +133,8 @@ export default class M3Hub extends Phaser.Scene {
     T(0, -104, 'OBJETIVO', 11, '#b8bfd8');
     lv.objectives.forEach((o, i) => {
       const y = -76 + i * 34;
-      const name = o.type === 'collect' ? `${o.n} ${FRUITS[o.color].name}` : o.type === 'ice' ? `Quebre ${o.n} gelos` : o.type === 'box' ? `Quebre ${o.n} caixas` : o.type === 'chain' ? `Solte ${o.n} correntes` : `Faça ${fmt(o.n)} pontos`;
-      const icon = o.type === 'collect' ? this.add.image(-60, y, 'm3-p' + o.color).setScale(0.34) : o.type === 'ice' ? this.add.image(-60, y, 'm3-ice2').setScale(0.34) : o.type === 'box' ? this.add.image(-60, y, 'm3-box1').setScale(0.34) : o.type === 'chain' ? this.add.image(-60, y, 'm3-chain').setScale(0.34) : this.add.image(-60, y, 'm3-star').setScale(0.6);
+      const name = o.type === 'collect' ? `${o.n} ${FRUITS[o.color].name}` : o.type === 'ice' ? `Quebre ${o.n} gelos` : o.type === 'box' ? `Quebre ${o.n} caixas` : o.type === 'chain' ? `Solte ${o.n} correntes` : o.type === 'honey' ? `Limpe ${o.n} méis` : `Faça ${fmt(o.n)} pontos`;
+      const icon = o.type === 'collect' ? this.add.image(-60, y, 'm3-p' + o.color).setScale(0.34) : o.type === 'ice' ? this.add.image(-60, y, 'm3-ice2').setScale(0.34) : o.type === 'box' ? this.add.image(-60, y, 'm3-box1').setScale(0.34) : o.type === 'chain' ? this.add.image(-60, y, 'm3-chain').setScale(0.34) : o.type === 'honey' ? this.add.image(-60, y, 'm3-honey').setScale(0.34) : this.add.image(-60, y, 'm3-star').setScale(0.6);
       c.add(icon); T(-36, y, name, 16).setOrigin(0, 0.5);
     });
     T(0, 34, `${lv.moves} jogadas`, 13, '#c8ceda');

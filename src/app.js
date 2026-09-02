@@ -42,6 +42,16 @@ const nameOf = (slot) => (lobby.players.get(slot)?.name) || slotName(slot);
 let phaserReady = null;
 function ensurePhaser() {
   if (phaserReady) return phaserReady;
+  // O Phaser desenha cada texto num canvas em 1x; em telas 2x/3x as letras
+  // sobem borradas. TextStyle tem 'resolution' para isso — forçamos o DPR
+  // como padrão de todo texto criado sem resolution explícita.
+  const DPR = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+  if (DPR > 1 && !Phaser.GameObjects.TextStyle.prototype.__dprPatched) {
+    const TS = Phaser.GameObjects.TextStyle.prototype;
+    const origSetStyle = TS.setStyle;
+    TS.setStyle = function (style, updateText, setDefaults) { const r = origSetStyle.call(this, style, updateText, setDefaults); if (!style || !style.resolution) this.resolution = DPR; return r; };
+    TS.__dprPatched = true;
+  }
   phaserReady = new Promise((resolve) => {
     phaser = new Phaser.Game({
       type: Phaser.AUTO,

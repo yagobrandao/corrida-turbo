@@ -25,6 +25,8 @@ const TUTORIAL = {
   ice: 'Faça trios em cima do GELO para quebrá-lo.',
   box: 'CAIXAS quebram com trios ao lado delas (ou com especiais).',
   chain: 'Frutas ACORRENTADAS não se movem: inclua-as num trio para soltar.',
+  honey: 'O MEL se espalha a cada jogada em que você não quebra nenhum. Faça trios nas frutas meladas!',
+  gen: 'O GERADOR acorrenta uma fruta vizinha a cada 3 jogadas. Solte as correntes rápido!',
 };
 
 export default class M3Play extends Phaser.Scene {
@@ -34,7 +36,7 @@ export default class M3Play extends Phaser.Scene {
     this.n = data.n; this.hooks = data.hooks; this.preBoosters = data.boosters || [];
     this.level = levelFor(this.n);
     this.board = new Board({ ...this.level, seedSpecials: this.preBoosters }, (this.level.seed + Date.now()) >>> 0);
-    this.views = new Map(); this.cellViews = []; this.iceViews = new Map(); this.boxViews = new Map(); this.chainViews = new Map();
+    this.views = new Map(); this.cellViews = []; this.iceViews = new Map(); this.boxViews = new Map(); this.chainViews = new Map(); this.honeyViews = new Map();
     this.busy = false; this.paused = false; this.sel = null; this.drag = null; this.mode = null; this.fx = []; this.ui = []; this.over = false; this.continued = false;
     this.comboPitch = 0;
   }
@@ -90,7 +92,9 @@ export default class M3Play extends Phaser.Scene {
       if (cell.box) this.boxViews.set(r * 32 + c, this.add.image(this._x(c), this._y(r), 'm3-box' + cell.box).setScale(sc).setDepth(D.PIECE));
       if (cell.piece) this._makePiece(cell.piece, r, c);
       if (cell.chain) this.chainViews.set(r * 32 + c, this.add.image(this._x(c), this._y(r), 'm3-chain').setScale(sc).setDepth(D.CHAIN));
+      if (cell.honey) this.honeyViews.set(r * 32 + c, this.add.image(this._x(c), this._y(r), 'm3-honey').setScale(sc).setDepth(D.CHAIN));
     }
+    for (let r = 0; r < b.rows; r++) for (let c = 0; c < b.cols; c++) if (b.grid[r][c].gen) this.add.image(this._x(c), this._y(r), 'm3-gen').setScale(sc).setDepth(D.PIECE);
     // máscara para as peças que nascem acima do tabuleiro
     const mask = this.make.graphics({ add: false }); mask.fillStyle(0xffffff); mask.fillRect(this.ox - 8, this.oy - 8, this.cs * b.cols + 16, this.cs * b.rows + 16);
     this.boardMask = mask.createGeometryMask();
@@ -128,6 +132,7 @@ export default class M3Play extends Phaser.Scene {
       else if (o.type === 'ice') icon = this.add.image(x, y, 'm3-ice2').setScale(0.42);
       else if (o.type === 'box') icon = this.add.image(x, y, 'm3-box1').setScale(0.42);
       else if (o.type === 'chain') icon = this.add.image(x, y, 'm3-chain').setScale(0.42);
+      else if (o.type === 'honey') icon = this.add.image(x, y, 'm3-honey').setScale(0.42);
       else icon = this.add.image(x, y, 'm3-star').setScale(0.7);
       S(icon);
       const t = S(this._text(x + 26, y, '', 15, '#fff').setOrigin(0, 0.5));
@@ -199,17 +204,40 @@ export default class M3Play extends Phaser.Scene {
     if (!b.pieceAt(cell.r, cell.c)) { this._select(null); return; }
     if (this.sel && Math.abs(this.sel.r - cell.r) + Math.abs(this.sel.c - cell.c) === 1) { const a = this.sel; this._select(null); this._swap(a.r, a.c, cell.r, cell.c); return; }
     this._select(cell);
-    this.drag = { r: cell.r, c: cell.c, x: p.x, y: p.y, id: p.id };
+    const v = this._viewAt(cell.r, cell.c);
+    if (v) v.setDepth(D.FLY);
+    this.drag = { r: cell.r, c: cell.c, x: p.x, y: p.y, id: p.id, v, nb: null, dir: null };
   }
+  // A peça segue o dedo (até meia casa) e a vizinha desliza no sentido
+  // contrário; passou de 45% da casa, a troca acontece. Soltou antes: volta.
   _move(p) {
-    if (!this.drag || p.id !== this.drag.id || this.busy) return;
-    const dx = p.x - this.drag.x, dy = p.y - this.drag.y;
-    if (Math.max(Math.abs(dx), Math.abs(dy)) < Math.max(14, this.cs * 0.3)) return;
-    const d = this.drag; this.drag = null; this._select(null);
-    const r2 = d.r + (Math.abs(dy) > Math.abs(dx) ? Math.sign(dy) : 0), c2 = d.c + (Math.abs(dx) >= Math.abs(dy) ? Math.sign(dx) : 0);
-    this._swap(d.r, d.c, r2, c2);
+    const d = this.drag;
+    if (!d || p.id !== d.id || this.busy) return;
+    const dx = p.x - d.x, dy = p.y - d.y;
+    const horiz = Math.abs(dx) >= Math.abs(dy);
+    const dir = horiz ? [0, Math.sign(dx)] : [Math.sign(dy), 0];
+    const amt = Math.min(this.cs * 0.55, Math.abs(horiz ? dx : dy));
+    if (amt < 3) return;
+    const r2 = d.r + dir[0], c2 = d.c + dir[1];
+    const nbView = this._viewAt(r2, c2);
+    if (d.nb && d.nb !== nbView) { this.tweens.add({ targets: d.nb, x: this._x(d.nbc), y: this._y(d.nbr), duration: 90 }); d.nb = null; }
+    if (nbView) { d.nb = nbView; d.nbr = r2; d.nbc = c2; }
+    if (d.v) { d.v.x = this._x(d.c) + dir[1] * amt; d.v.y = this._y(d.r) + dir[0] * amt; d.v.setScale(this.cs / 96 * 1.05); }
+    if (d.nb) { d.nb.x = this._x(c2) - dir[1] * amt * 0.6; d.nb.y = this._y(r2) - dir[0] * amt * 0.6; }
+    if (amt >= this.cs * 0.45) {
+      this.drag = null; this._select(null);
+      if (d.v) d.v.setScale(this.cs / 96 * 0.94);
+      this._swap(d.r, d.c, r2, c2);
+    }
   }
-  _up(p) { if (this.drag && p.id === this.drag.id) this.drag = null; }
+  _up(p) {
+    const d = this.drag;
+    if (!d || p.id !== d.id) return;
+    this.drag = null;
+    // não completou: volta suave para o lugar
+    if (d.v) { this.tweens.add({ targets: d.v, x: this._x(d.c), y: this._y(d.r), scale: this.cs / 96 * 0.94, duration: 140, ease: 'Back.out', onComplete: () => d.v.setDepth(D.PIECE + d.r) }); }
+    if (d.nb) this.tweens.add({ targets: d.nb, x: this._x(d.nbc), y: this._y(d.nbr), duration: 140, ease: 'Back.out' });
+  }
   _select(cell) {
     if (this.selView) { this.selView.destroy(); this.selView = null; }
     this.sel = cell;
@@ -248,9 +276,10 @@ export default class M3Play extends Phaser.Scene {
       if (!va || !vb) return;
       sfx.lane();
       va.setDepth(D.FLY);
-      await Promise.all([tweenP(this, { targets: va, x: this._x(ph.b.c), y: this._y(ph.b.r), duration: 130, ease: 'Sine.inOut' }), tweenP(this, { targets: vb, x: this._x(ph.a.c), y: this._y(ph.a.r), duration: 130, ease: 'Sine.inOut' })]);
-      if (ph.fail) { await Promise.all([tweenP(this, { targets: va, x: this._x(ph.a.c), y: this._y(ph.a.r), duration: 130, ease: 'Sine.inOut' }), tweenP(this, { targets: vb, x: this._x(ph.b.c), y: this._y(ph.b.r), duration: 130, ease: 'Sine.inOut' })]); va.setDepth(D.PIECE + ph.a.r); return; }
-      va.setDepth(D.PIECE + ph.b.r); vb.setDepth(D.PIECE + ph.a.r);
+      const sc0 = this.cs / 96 * 0.94;
+      await Promise.all([tweenP(this, { targets: va, x: this._x(ph.b.c), y: this._y(ph.b.r), scale: sc0 * 1.08, duration: 200, ease: 'Quad.out' }), tweenP(this, { targets: vb, x: this._x(ph.a.c), y: this._y(ph.a.r), duration: 200, ease: 'Quad.out' })]);
+      if (ph.fail) { sfx.hit(); await Promise.all([tweenP(this, { targets: va, x: this._x(ph.a.c), y: this._y(ph.a.r), scale: sc0, duration: 220, ease: 'Back.out' }), tweenP(this, { targets: vb, x: this._x(ph.b.c), y: this._y(ph.b.r), duration: 220, ease: 'Back.out' })]); va.setDepth(D.PIECE + ph.a.r); return; }
+      va.setScale(sc0); va.setDepth(D.PIECE + ph.b.r); vb.setDepth(D.PIECE + ph.a.r);
       return;
     }
     if (ph.t === 'clear') {
@@ -260,6 +289,7 @@ export default class M3Play extends Phaser.Scene {
       for (const ice of ph.ice) { const k = ice.r * 32 + ice.c; const v = this.iceViews.get(k); if (v) { if (ice.left > 0) v.setTexture('m3-ice' + ice.left); else { this.iceViews.delete(k); this.tweens.add({ targets: v, alpha: 0, scale: v.scale * 1.3, duration: 220, onComplete: () => v.destroy() }); } this._burst(this._x(ice.c), this._y(ice.r), 0x9fe8ff, 6); } }
       for (const bx of ph.boxes) { const k = bx.r * 32 + bx.c; const v = this.boxViews.get(k); if (v) { if (bx.left > 0) { v.setTexture('m3-box' + bx.left); this.tweens.add({ targets: v, x: v.x + 4, duration: 40, yoyo: true, repeat: 2 }); } else { this.boxViews.delete(k); this.tweens.add({ targets: v, alpha: 0, angle: 20, y: v.y + 20, duration: 260, onComplete: () => v.destroy() }); } this._burst(this._x(bx.c), this._y(bx.r), 0xb5773a, 6); } }
       for (const ch of ph.chains) { const k = ch.r * 32 + ch.c; const v = this.chainViews.get(k); if (v) { this.chainViews.delete(k); this.tweens.add({ targets: v, alpha: 0, scale: v.scale * 1.4, duration: 220, onComplete: () => v.destroy() }); this._burst(this._x(ch.c), this._y(ch.r), 0xc8ceda, 5); } }
+      for (const h of ph.honey || []) { const k = h.r * 32 + h.c; const v = this.honeyViews.get(k); if (v) { this.honeyViews.delete(k); this.tweens.add({ targets: v, alpha: 0, scale: v.scale * 0.6, duration: 220, onComplete: () => v.destroy() }); this._burst(this._x(h.c), this._y(h.r), 0xffb300, 7); } }
       const pops = [];
       for (const p of ph.pieces) {
         const v = this.views.get(p.id); if (!v) continue;
@@ -292,9 +322,11 @@ export default class M3Play extends Phaser.Scene {
       return;
     }
     if (ph.t === 'fall') {
+      // queda com aceleração (gravidade) e um quique curto ao pousar
       const tw = [];
-      for (const m of ph.moves) { const v = this.views.get(m.id); if (!v) continue; v.setDepth(D.PIECE + m.to.r); const dist = m.to.r - m.from.r; tw.push(tweenP(this, { targets: v, y: this._y(m.to.r), duration: 90 + dist * 55, ease: 'Bounce.out' })); }
-      for (const s of ph.spawns) { const v = this._makePiece({ id: s.id, c: s.color, s: null }, s.r, s.c, this._y(s.fromRow) ); const dist = s.r - s.fromRow; tw.push(tweenP(this, { targets: v, y: this._y(s.r), duration: 90 + dist * 55, ease: 'Bounce.out' })); }
+      const drop = (v, toY, dist) => tweenP(this, { targets: v, y: toY, duration: 140 + Math.sqrt(dist) * 95, ease: 'Quad.in' }).then(() => tweenP(this, { targets: v, scaleY: v.scaleX * 0.86, scaleX: v.scaleX * 1.08, duration: 60, yoyo: true, ease: 'Sine.out' }));
+      for (const m of ph.moves) { const v = this.views.get(m.id); if (!v) continue; v.setDepth(D.PIECE + m.to.r); tw.push(drop(v, this._y(m.to.r), m.to.r - m.from.r)); }
+      for (const s of ph.spawns) { const v = this._makePiece({ id: s.id, c: s.color, s: null }, s.r, s.c, this._y(s.fromRow)); tw.push(drop(v, this._y(s.r), s.r - s.fromRow)); }
       await Promise.all(tw);
       return;
     }
@@ -312,6 +344,19 @@ export default class M3Play extends Phaser.Scene {
       return;
     }
     if (ph.t === 'moves') { this._refreshHud(); this._float(GAME_W - 62, 98, '+5', '#8fe66a', 26); return; }
+    if (ph.t === 'spread') {
+      for (const s of ph.list) {
+        const k = s.r * 32 + s.c;
+        const img = this.add.image(this._x(s.c), this._y(s.r), s.kind === 'honey' ? 'm3-honey' : 'm3-chain').setScale(0).setDepth(D.CHAIN);
+        (s.kind === 'honey' ? this.honeyViews : this.chainViews).set(k, img);
+        this.tweens.add({ targets: img, scale: this.cs / 96, duration: 260, ease: 'Back.out' });
+        this._toast(s.kind === 'honey' ? 'O mel se espalhou!' : 'O gerador acorrentou uma fruta!', '#ffb300');
+        noise({ dur: 0.15, vol: 0.15 });
+      }
+      await wait(this, 260);
+      this._refreshHud();
+      return;
+    }
   }
   _viewAt(r, c) { const p = this.board.pieceAt(r, c); return p ? this.views.get(p.id) : null; }
 
@@ -393,8 +438,8 @@ export default class M3Play extends Phaser.Scene {
     const objs = this.board.objectives;
     objs.forEach((o, i) => {
       const y = 8 + i * 34;
-      const name = o.type === 'collect' ? `${o.n} ${FRUITS[o.color].name}` : o.type === 'ice' ? `Quebre ${o.n} gelos` : o.type === 'box' ? `Quebre ${o.n} caixas` : o.type === 'chain' ? `Solte ${o.n} correntes` : `Faça ${fmt(o.n)} pontos`;
-      const icon = o.type === 'collect' ? this.add.image(-60, y, 'm3-p' + o.color).setScale(0.36) : o.type === 'ice' ? this.add.image(-60, y, 'm3-ice2').setScale(0.36) : o.type === 'box' ? this.add.image(-60, y, 'm3-box1').setScale(0.36) : o.type === 'chain' ? this.add.image(-60, y, 'm3-chain').setScale(0.36) : this.add.image(-60, y, 'm3-star').setScale(0.6);
+      const name = o.type === 'collect' ? `${o.n} ${FRUITS[o.color].name}` : o.type === 'ice' ? `Quebre ${o.n} gelos` : o.type === 'box' ? `Quebre ${o.n} caixas` : o.type === 'chain' ? `Solte ${o.n} correntes` : o.type === 'honey' ? `Limpe ${o.n} méis` : `Faça ${fmt(o.n)} pontos`;
+      const icon = o.type === 'collect' ? this.add.image(-60, y, 'm3-p' + o.color).setScale(0.36) : o.type === 'ice' ? this.add.image(-60, y, 'm3-ice2').setScale(0.36) : o.type === 'box' ? this.add.image(-60, y, 'm3-box1').setScale(0.36) : o.type === 'chain' ? this.add.image(-60, y, 'm3-chain').setScale(0.36) : o.type === 'honey' ? this.add.image(-60, y, 'm3-honey').setScale(0.36) : this.add.image(-60, y, 'm3-star').setScale(0.6);
       c.add([icon, this._text(-36, y, name, 16, '#fff').setOrigin(0, 0.5)]);
     });
     c.add(this._text(0, 72, `${this.board.moves} jogadas`, 13, '#c8ceda'));
@@ -458,7 +503,7 @@ export default class M3Play extends Phaser.Scene {
     const canContinue = !this.continued && pct >= 0.55;
     if (canContinue) {
       c.add(this._text(0, -130, 'QUASE LÁ!', 28, '#ffd23e'));
-      const left = b.objectives.filter(o => o.got < o.n).map(o => `${o.n - o.got} ${o.type === 'collect' ? FRUITS[o.color].name : o.type === 'ice' ? 'gelos' : o.type === 'box' ? 'caixas' : o.type === 'chain' ? 'correntes' : 'pontos'}`).join(', ');
+      const left = b.objectives.filter(o => o.got < o.n).map(o => `${o.n - o.got} ${o.type === 'collect' ? FRUITS[o.color].name : o.type === 'ice' ? 'gelos' : o.type === 'box' ? 'caixas' : o.type === 'chain' ? 'correntes' : o.type === 'honey' ? 'méis' : 'pontos'}`).join(', ');
       c.add(this._text(0, -90, `Faltam apenas: ${left}`, 14, '#fff', { wordWrap: { width: 300 }, align: 'center' }));
       c.add(this._text(0, -46, `CONTINUAR COM +${CONTINUE_MOVES} JOGADAS?`, 14, '#c8ceda'));
       const hasMoves = P.boosterCount('moves') > 0;
