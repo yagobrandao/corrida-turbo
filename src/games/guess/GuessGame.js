@@ -220,7 +220,26 @@ export function createGame(ctx) {
     else bus.toHost({ k: M.GUESS, w: raw });
   }
   el.send.addEventListener('click', submit);
-  el.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  // o botão não pode roubar o foco do campo: senão o teclado fecha a cada envio
+  el.send.addEventListener('pointerdown', (e) => e.preventDefault());
+  el.send.addEventListener('mousedown', (e) => e.preventDefault());
+  el.input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+
+  // Teclado aberto no celular: um layout fixo NÃO encolhe no iOS — a página
+  // rola para mostrar o campo e o topo some. Em vez disso, encaixamos o palco
+  // no viewport VISUAL (o que sobra acima do teclado) e travamos a rolagem.
+  const vv = window.visualViewport;
+  const fit = () => {
+    if (!vv) return;
+    const kb = window.innerHeight - vv.height > 80;   // teclado (ou barra) ocupando espaço
+    stage.style.top = kb ? vv.offsetTop + 'px' : '';
+    stage.style.height = kb ? vv.height + 'px' : '';
+    stage.style.bottom = kb ? 'auto' : '';
+    if (kb) { window.scrollTo(0, 0); el.feed.scrollTop = el.feed.scrollHeight; }
+  };
+  if (vv) { vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); }
+  el.input.addEventListener('focus', () => setTimeout(fit, 300));
+  el.input.addEventListener('blur', () => setTimeout(fit, 300));
 
   // ---------------- rede ----------------
   const unbind = bus.on((p, from) => {
@@ -260,6 +279,8 @@ export function createGame(ctx) {
       unbind();
       ui.setPauseMenu(null);
       ui.hideHUD();
+      if (vv) { vv.removeEventListener('resize', fit); vv.removeEventListener('scroll', fit); }
+      stage.style.top = stage.style.height = stage.style.bottom = '';
       ui.clearStage();
     },
   };

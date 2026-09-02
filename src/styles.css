@@ -1515,3 +1515,14 @@ html, body {
 }
 .swatch.on { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold), inset 0 0 0 1.5px rgba(0,0,0,.25); }
 .swatch .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+
+
+/* ---- Arena Clash: jogo em paisagem (suspende o aviso da plataforma) ---- */
+body.landscape-game #rotate-overlay { display: none !important; }
+.ar-gate { position: fixed; inset: 0; z-index: 60; background: #141a33; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; color: #fff; font-family: var(--font); text-align: center; }
+.ar-gate.hidden { display: none; }
+.ar-gate-phone { width: 46px; height: 84px; border: 4px solid #3ddad7; border-radius: 10px; position: relative; animation: ar-gate-phone 2s ease-in-out infinite; }
+.ar-gate-phone::after { content: ''; position: absolute; left: 50%; bottom: 6px; width: 10px; height: 10px; margin-left: -5px; border-radius: 50%; background: #3ddad7; }
+.ar-gate-txt { font-size: 20px; font-weight: 800; }
+.ar-gate-sub { font-size: 13px; color: #c8ceda; }
+@keyframes ar-gate-phone { 0%, 20% { transform: rotate(0); } 50%, 75% { transform: rotate(-90deg); } 100% { transform: rotate(0); } }
