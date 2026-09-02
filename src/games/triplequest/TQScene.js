@@ -31,11 +31,11 @@ const BOOST_Y = 792;
 // abaixo de qualquer coisa em movimento ou UI.
 const D = {
   BOARD: 10,      // + camada (0..4) → 10..14; nunca passa da faixa da UI
-  UI: 20,         // bandeja parada, boosters, textos do topo
+  UI: 20, TRAY: 26,         // bandeja parada, boosters, textos do topo
   FLYING: 45,     // peça em voo até a bandeja — sempre visível por cima do tabuleiro
   FX: 50,         // brilhos, partículas, anel de dica
   TOAST: 58,
-};
+};   // TRAY fica acima dos slots da bandeja (22)
 
 export default class TQScene extends Phaser.Scene {
   constructor() { super('triplequest'); }
@@ -433,7 +433,7 @@ export default class TQScene extends Phaser.Scene {
     m.tray.forEach((x, i) => {
       const v = this.views.get(x.id);
       if (!v) return;
-      v.setDepth(D.UI);
+      v.setDepth(D.TRAY);
       if (animate) this.tweens.add({ targets: v, x: this._slotX(i), y: TRAY_Y, scale, duration: 180, ease: 'quad.out' });
       else v.setPosition(this._slotX(i), TRAY_Y).setScale(scale);
     });
@@ -461,7 +461,7 @@ export default class TQScene extends Phaser.Scene {
     this.tweens.add({ targets: v, y: v.y - 14, scale: v.baseScale * 1.15, duration: 90, yoyo: false, onComplete: () => {
       this._layoutTray(true);
       this.tweens.add({ targets: v, x: this._slotX(res.at), y: TRAY_Y, scale: (this.slotW - 10) / TEX, duration: 220, ease: 'quad.inOut', onComplete: () => {
-        v.setDepth(D.UI);
+        v.setDepth(D.TRAY);
         if (res.cleared.length) this._fxTriple(res);
         else this._afterMove();
       } });
