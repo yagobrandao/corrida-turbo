@@ -226,7 +226,8 @@ export default class M3Play extends Phaser.Scene {
     d.amt = amt; d.r2 = r2; d.c2 = c2;
     if (d.v) { d.v.x = this._x(d.c) + dir[1] * amt; d.v.y = this._y(d.r) + dir[0] * amt; d.v.setScale(this.cs / 96 * 1.05); }
     if (d.nb) { d.nb.x = this._x(c2) - dir[1] * amt * 0.6; d.nb.y = this._y(r2) - dir[0] * amt * 0.6; }
-    if (amt >= this.cs * 0.5) this._commitDrag(d);   // deslize decidido: completa sem soltar
+    // a troca completa ao soltar; só antecipa se o dedo já cruzou a casa inteira
+    if (amt >= this.cs * 0.55 && Math.abs(horiz ? dx : dy) >= this.cs) this._commitDrag(d);
   }
   _commitDrag(d) {
     this.drag = null; this._select(null);
@@ -278,7 +279,8 @@ export default class M3Play extends Phaser.Scene {
     const b = this.board, sc = this.cs / 96 * 0.94;
     if (ph.t === 'locked') { const v = this._viewAt(ph.r, ph.c); if (v) await tweenP(this, { targets: v, x: v.x + 5, duration: 40, yoyo: true, repeat: 3 }); this._toast('Está presa!', '#ff8b8b'); return; }
     if (ph.t === 'swap') {
-      const va = this._viewAt(ph.a.r, ph.a.c), vb = this._viewAt(ph.b.r, ph.b.c);
+      // por ID: a peça que ESTAVA em a vai para b, e vice-versa
+      const va = this.views.get(ph.a.id), vb = this.views.get(ph.b.id);
       if (!va || !vb) return;
       sfx.lane();
       this.tweens.killTweensOf(va); this.tweens.killTweensOf(vb);

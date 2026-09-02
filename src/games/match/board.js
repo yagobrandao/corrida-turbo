@@ -112,8 +112,9 @@ export class Board {
     if (this.over) return { ok: false, phases: [] };
     if (Math.abs(r1 - r2) + Math.abs(c1 - c2) !== 1) return { ok: false, phases: [] };
     if (!this._canMove(r1, c1) || !this._canMove(r2, c2)) return { ok: false, phases: [{ t: 'locked', r: this._canMove(r1, c1) ? r2 : r1, c: this._canMove(r1, c1) ? c2 : c1 }] };
-    if (!this._swapValid(r1, c1, r2, c2)) return { ok: false, phases: [{ t: 'swap', a: { r: r1, c: c1 }, b: { r: r2, c: c2 }, fail: true }] };
-    const phases = [{ t: 'swap', a: { r: r1, c: c1 }, b: { r: r2, c: c2 } }];
+    const ida = this.pieceAt(r1, c1).id, idb = this.pieceAt(r2, c2).id;
+    if (!this._swapValid(r1, c1, r2, c2)) return { ok: false, phases: [{ t: 'swap', a: { r: r1, c: c1, id: ida }, b: { r: r2, c: c2, id: idb }, fail: true }] };
+    const phases = [{ t: 'swap', a: { r: r1, c: c1, id: ida }, b: { r: r2, c: c2, id: idb } }];
     this._swap(r1, c1, r2, c2);
     this.moves--;
     const a = this.pieceAt(r1, c1), b = this.pieceAt(r2, c2);   // a agora está em (r1,c1) — era a peça de (r2,c2)
