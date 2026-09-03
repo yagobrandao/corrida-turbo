@@ -38,6 +38,7 @@ const HUD_HTML = `
   </div>`;
 
 const hearts = (n) => '❤️'.repeat(Math.max(0, n)) + '🖤'.repeat(Math.max(0, 3 - n));
+const fmtSurvival = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`; };
 
 export function createGame(ctx) {
   const { phaser, bus, players, mySlot, isHost, seed, settings, onFinish } = ctx;
@@ -50,6 +51,7 @@ export function createGame(ctx) {
   let graceTimer = null;
   let snapTimer = null;
   let unbind = null;
+  let raceStartedAt = 0;      // instante real da largada (pós-3-2-1) — base do ranking por sobrevivência
 
   const progress = getProgress();
   const rivals = players
@@ -223,17 +225,25 @@ export function createGame(ctx) {
     clearInterval(snapTimer);
     if (scene) scene.freezeRun();
 
+    // Ranking por TEMPO DE SOBREVIVÊNCIA, não por pontos: numa corrida sem
+    // fim, quem morre cedo indo rápido pode acabar com mais distância/pontos
+    // que alguém cauteloso que aguentou muito mais tempo em pista — o que é
+    // injusto com quem "durou vivo". Quem ainda está de pé quando a corrida
+    // fecha sempre fica acima de quem já morreu (desempate por distância);
+    // entre os que morreram, ordena por quanto tempo cada um durou.
     const rows = players.map(p => {
       const fin = finals.get(p.slot);
       const live = states.get(p.slot);
+      const stillAlive = !fin;
       const s = fin || (live
         ? { d: Math.floor(live.d), sc: Math.floor(live.sc), co: live.co || 0 }
         : { d: 0, sc: 0, co: 0 });
+      const survivedMs = fin ? (fin.t ?? 0) : Math.max(0, Date.now() - raceStartedAt);
       return {
         slot: p.slot, name: p.name,
         score: Math.floor(s.sc), coins: s.co || 0,
-        detail: `${ui.nf(Math.floor(s.d))} m`,
-        sort: s.d,
+        detail: `${fmtSurvival(survivedMs)}${stillAlive ? ' na pista' : ' vivo'} · ${ui.nf(Math.floor(s.d))} m`,
+        sort: stillAlive ? (1e9 + s.d) : survivedMs,
         // métricas para missões/conquistas (só as minhas importam)
         metrics: p.slot === mySlot
           ? { dist: Math.floor(s.d), coins: s.co || 0, kmh: s.kmh || (scene ? Math.round(scene.topSpeed * 3.6) : 0) }
@@ -253,14 +263,14 @@ export function createGame(ctx) {
 
   return {
     // chamado pela plataforma quando o countdown termina
-    begin() { started.then(() => scene && scene.beginRun()); },
+    begin() { started.then(() => { if (scene) scene.beginRun(); raceStartedAt = Date.now(); }); },
     // um jogador caiu da rede: conta como eliminado
     playerLeft(slot) {
       if (!finals.has(slot)) {
         const live = states.get(slot);
         finals.set(slot, live
-          ? { d: Math.floor(live.d), sc: Math.floor(live.sc), co: live.co || 0 }
-          : { d: 0, sc: 0, co: 0 });
+          ? { d: Math.floor(live.d), sc: Math.floor(live.sc), co: live.co || 0, t: Date.now() - raceStartedAt }
+          : { d: 0, sc: 0, co: 0, t: 0 });
       }
       if (scene) scene.remoteDead(slot);
       checkEnd();

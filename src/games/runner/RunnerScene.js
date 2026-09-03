@@ -270,6 +270,7 @@ export default class RunnerScene extends Phaser.Scene {
       sc: Math.floor(this.dist * SCORE_PER_M + this.coins * COIN_VALUE + this.bonusScore),
       co: this.coins,
       kmh: Math.round(this.topSpeed * 3.6),
+      t: Math.round(this.elapsed * 1000),   // ms vivo desde a largada — usado no ranking por sobrevivência
     };
   }
 
