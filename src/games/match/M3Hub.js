@@ -72,11 +72,55 @@ export default class M3Hub extends Phaser.Scene {
     this._btn(GAME_W / 2 + 40, y0 + 184, 250, 50, 'DIÁRIO' + (badge ? '  •' : ''), badge ? 0xd45de0 : 0x8d5ac0, () => this._show('daily'), 16);
     this._btn(GAME_W / 2 - 90, y0 + 242, 160, 44, `COLEÇÃO ${s.cards}/${COLLECTION.length}`, 0x453a82, () => this._show('collection'), 13);
     this._btn(GAME_W / 2 + 90, y0 + 242, 160, 44, `PERFIL  ·  Nv ${s.lvl}`, 0x453a82, () => this._show('profile'), 13);
+    this._btn(GAME_W / 2 - 90, y0 + 296, 160, 44, '⚔️ BATALHA', 0xe8483f, () => this._battleMenu(), 13);
+    this._btn(GAME_W / 2 + 90, y0 + 296, 160, 44, '🤖 VS BOT', 0x2b7fd4, () => this._vsBotSetup(), 13);
     // vidas
     const ly = GAME_H - 150;
     for (let i = 0; i < LIVES_MAX; i++) { const h = this.add.image(GAME_W / 2 - 60 + i * 30, ly, 'm3-heart').setScale(0.7).setDepth(10).setAlpha(i < s.lives ? 1 : 0.25); this.ui.push(h); }
     this.livesText = this._text(GAME_W / 2, ly + 26, '', 11, '#fff'); this._tickHud();
     if (s.streak) this._text(GAME_W / 2, ly + 46, `🔥 ${s.streak} dia${s.streak > 1 ? 's' : ''} seguidos`, 12, '#ffd23e');
+  }
+
+  // ---------------------------------------------------------------- batalha
+  _battleMenu() {
+    if (this.hooks.battleRoom && this.hooks.canBattleRoom && this.hooks.canBattleRoom()) { this.hooks.battleRoom(); return; }
+    this._toast('Crie uma sala com 2 a 5 jogadores na Central de Jogos para desafiar amigos. Sozinho, tente VS BOT!', '#ff8b8b');
+  }
+  _vsBotSetup() {
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x141a33, 0.85).setDepth(80).setInteractive(); this.ui.push(dim);
+    const c = this.add.container(GAME_W / 2, GAME_H / 2 - 20).setDepth(81); this.ui.push(c);
+    const bg = this.add.graphics(); bg.fillStyle(0x1f2748, 1); bg.fillRoundedRect(-170, -220, 340, 440, 22); bg.lineStyle(4, 0x2b7fd4, 0.8); bg.strokeRoundedRect(-170, -220, 340, 440, 22); c.add(bg);
+    const T = (x, y, s, size, color = '#fff', extra = {}) => { const t = this.add.text(x, y, s, { fontFamily: FONT, fontSize: size + 'px', color, fontStyle: 'bold', ...extra }).setOrigin(0.5); c.add(t); return t; };
+    T(0, -190, 'VS BOT', 26, '#2b7fd4');
+    T(0, -160, 'treino local: você + bots, sem precisar de sala', 11, '#b8bfd8', { wordWrap: { width: 300 }, align: 'center' });
+    T(0, -120, 'QUANTOS PARTICIPANTES', 12, '#b8bfd8');
+    let n = 3;
+    const nText = T(0, -80, String(n), 32, '#ffd23e');
+    const dec = this.add.rectangle(-90, -80, 44, 44, 0x2c3766, 1).setStrokeStyle(2, 0xffffff, 0.4).setInteractive(); c.add(dec);
+    const inc = this.add.rectangle(90, -80, 44, 44, 0x2c3766, 1).setStrokeStyle(2, 0xffffff, 0.4).setInteractive(); c.add(inc);
+    T(-90, -80, '-', 24); T(90, -80, '+', 24);
+    dec.on('pointerdown', (p) => { p.event.stopPropagation(); if (n > 2) { n--; nText.setText(String(n)); } });
+    inc.on('pointerdown', (p) => { p.event.stopPropagation(); if (n < 5) { n++; nText.setText(String(n)); } });
+    T(0, -30, `você + ${n - 1} bot${n - 1 > 1 ? 's' : ''}`, 12, '#8fe66a');
+    T(0, 4, 'DIFICULDADE DOS BOTS', 12, '#b8bfd8');
+    let diff = 'medium';
+    const diffBtns = [];
+    ['easy', 'medium', 'hard'].forEach((d, i) => {
+      const x = -90 + i * 90;
+      const r = this.add.rectangle(x, 34, 80, 32, d === diff ? 0x2b7fd4 : 0x2c3766, 1).setStrokeStyle(2, 0xffffff, 0.4).setInteractive(); c.add(r);
+      const label = { easy: 'Fácil', medium: 'Médio', hard: 'Difícil' }[d];
+      T(x, 34, label, 11);
+      r.on('pointerdown', (p) => { p.event.stopPropagation(); diff = d; for (const b of diffBtns) b.setFillStyle(b.dv === diff ? 0x2b7fd4 : 0x2c3766, 1); });
+      r.dv = d; diffBtns.push(r);
+    });
+    T(0, 76, 'a barra de energia carrega com trios/cascatas; ao encher, toque em ⚡ pra atacar o adversário', 10, '#c8ceda', { wordWrap: { width: 280 }, align: 'center' });
+    const start = this.add.rectangle(0, 150, 240, 54, 0xe8483f, 1).setStrokeStyle(3, 0xffffff, 0.5).setInteractive(); c.add(start);
+    T(0, 150, 'COMEÇAR', 18);
+    start.on('pointerdown', (p) => { p.event.stopPropagation(); sfx.go(); this.hooks.battleVsBot({ participants: n, difficulty: diff }); });
+    const close = this.add.rectangle(0, 190, 160, 36, 0x453a82, 1).setStrokeStyle(2, 0xffffff, 0.3).setInteractive(); c.add(close);
+    T(0, 190, 'CANCELAR', 12);
+    close.on('pointerdown', (p) => { p.event.stopPropagation(); dim.destroy(); c.destroy(); });
+    dim.on('pointerdown', () => { dim.destroy(); c.destroy(); });
   }
 
   // ---------------------------------------------------------------- mapa
