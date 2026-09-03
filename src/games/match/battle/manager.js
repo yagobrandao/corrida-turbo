@@ -5,7 +5,7 @@
 // as mensagens; aqui só existe o estado real: rodada, pareamentos, HP,
 // eliminações, ranking. Roda inteiro no host quando há sala; roda local
 // quando é treino contra bot.
-import * as MM from './matchmaking.js';
+import * as MM from '../../../core/pairing.js';
 import * as G from './ghost.js';
 import { computeDamage } from './damage.js';
 import { START_HP, ROUND_MS } from './config.js';

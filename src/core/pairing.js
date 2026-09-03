@@ -1,4 +1,7 @@
-// Pomar Mágico — Batalha: MatchmakingRoundManager (puro).
+// MatchmakingRoundManager (puro, sem Phaser, sem rede) — parear jogadores
+// 1 contra 1 por rodada com suporte a Ghost quando a quantidade é ímpar.
+// Compartilhado entre os jogos que têm modo competitivo em sala (usado
+// primeiro no Pomar Mágico; reaproveitado pelo Battle Tactics).
 //
 // Toda rodada, todo jogador ATIVO joga uma partida real: contra outro
 // jogador ativo, ou — quando a quantidade é ímpar — contra o Ghost de um
@@ -14,7 +17,7 @@
 //      não no custo do par — é uma decisão separada, ver pickGhostSource)
 //   3. variar quem enfrenta o Ghost (peso leve)
 //   4. equilibrar HP entre os dois lados (peso mínimo, só desempate)
-import { mulberry32 } from '../../../core/rng.js';
+import { mulberry32 } from './rng.js';
 
 const W_REPEAT = 100;
 const W_CONSEC = 300;

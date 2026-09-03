@@ -152,10 +152,10 @@ export const GAMES = [
     name: 'Battle Tactics',
     emoji: '⚔️',
     tagline: 'Monte o exército e veja a batalha',
-    description: 'Auto battler: compre unidades na loja, junte três iguais para evoluir, combine facções, classes e duplas para ativar bônus e posicione seu exército. Depois é só assistir: eles lutam sozinhos. Sozinho, sobreviva 10 rodadas e derrote o Ancião de Pedra. Com um amigo, é 1 contra 1: cada um monta o seu e os exércitos se enfrentam.',
+    description: 'Auto battler: compre unidades na loja, junte três iguais para evoluir, combine facções, classes e duplas para ativar bônus e posicione seu exército. Depois é só assistir: eles lutam sozinhos. Sozinho, sobreviva 10 rodadas e derrote o Ancião de Pedra. Com amigos (2 a 5 na sala), todo confronto é 1 contra 1 — quem sobra sem par (sala de 3 ou 5) enfrenta um Ghost, uma cópia da formação mais recente de outro jogador, só para ninguém ficar de fora.',
     category: 'estrategia',
-    minPlayers: 1,     // solo contra a IA; com um amigo vira PvP 1v1
-    maxPlayers: 2,
+    minPlayers: 1,     // solo contra a IA; com 2-5 na sala vira PvP em duplas 1v1
+    maxPlayers: 5,
     accent: '#c9302a',
     load: () => import('./autobattler/BattleGame.js'),
   },

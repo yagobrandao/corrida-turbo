@@ -16,11 +16,12 @@ import {
   permCoinsFor, pvpCoinsFor, TOTAL_ROUNDS, UNITS, SHOP_UNITS, RARITIES, FACTIONS, CLASSES,
   SYNERGIES, PAIRS, STAR_MULT,
 } from './config.js';
+import { pairRoom, findMyPairing, myRoleIn, oppSlotIn, PvpRoomHost } from './pvpRoom.js';
 import * as ui from '../../ui/gameui.js';
 import { icon } from '../../ui/icons.js';
 
 const KEY = 'ct-battle-v1';
-const M = { BOARD: 'bt:board', READY: 'bt:ready', BATTLE: 'bt:battle' };
+const M = { BOARD: 'bt:board', READY: 'bt:ready', BATTLE: 'bt:battle', DONE: 'bt:done', FINISH: 'bt:finish' };
 
 function loadSave() {
   try {
@@ -48,10 +49,25 @@ export function createGame(ctx) {
   const { phaser, bus, players, mySlot, isHost, seed, onFinish } = ctx;
   const save = loadSave();
   const pvp = players.length >= 2 && bus.online;
-  const opp = pvp ? players.find(p => p.slot !== mySlot) : null;
   const nameOf = (slot) => (players.find(p => p.slot === slot) || {}).name || `Jogador ${slot + 1}`;
   let scene = null;
   let ended = false;
+
+  // ---------------------------------------------------------------- sala (2-5 jogadores)
+  // Todo mundo calcula o MESMO pareamento sozinho — é determinístico a
+  // partir de (players, seed), que já chegam iguais em todo aparelho, sem
+  // precisar de mais uma mensagem. Sobrando um (sala com 3 ou 5), ele
+  // enfrenta um Ghost: uma cópia da formação mais recente de outro
+  // jogador real e ativo, nunca uma simulação — e nunca afeta o dono.
+  const pairings = pvp ? pairRoom(players, seed) : [];
+  const myPairing = pvp ? findMyPairing(pairings, mySlot) : null;
+  const isGhostMatch = !!(myPairing && myPairing.ghostSourceSlot !== null);
+  const opp = myPairing
+    ? (isGhostMatch
+      ? { slot: null, name: 'Ghost de ' + nameOf(myPairing.ghostSourceSlot), isGhost: true }
+      : players.find(p => p.slot === oppSlotIn(myPairing, mySlot)))
+    : null;
+  const myFlip = myPairing && !isGhostMatch && myRoleIn(myPairing, mySlot) === 'guest';
 
   ui.showHUD(HUD_HTML);
   const el = {
@@ -73,24 +89,29 @@ export function createGame(ctx) {
   });
 
   // ---------------------------------------------------------------- PvP: bus
-  // host guarda as formações da rodada; quando as duas chegam, devolve o par
-  const boards = {};   // round -> { host, guest }
+  // o host DA SALA (não confundir com o "host" de uma dupla — cada dupla
+  // tem seu próprio papel host/guest, ver pvpRoom.js) enxerga a submissão
+  // de formação de TODO mundo e roteia cada dupla pro par certo. Um
+  // "toSlot" endereçado a mim mesmo não passa pela rede — chamo a cena
+  // direto (mesmo padrão do resto da plataforma).
+  const roomHost = isHost && pvp ? new PvpRoomHost(players, seed) : null;
+  const deliver = (toSlot, apply) => { if (toSlot === mySlot) apply(); else return false; return true; };
   const unbind = bus.on((p, from) => {
     if (!p || typeof p.k !== 'string') return;
     if (isHost) {
-      if (p.k === M.BOARD) {
-        const b = boards[p.round] || (boards[p.round] = {});
-        b[from === 0 ? 'host' : 'guest'] = p.spec;
-        bus.toAll({ k: M.READY, slot: from, round: p.round });
-        if (from !== mySlot && scene) scene.pvpOppReady();
-        if (b.host && b.guest) {
-          bus.toAll({ k: M.BATTLE, round: p.round, boards: b });
-          if (scene) scene.pvpBattle(p.round, b);
+      if (p.k === M.BOARD && roomHost) {
+        for (const eff of roomHost.submitBoard(from, p.round, p.spec)) {
+          if (eff.t === 'ready') { if (!deliver(eff.toSlot, () => { if (scene) scene.pvpOppReady(); })) bus.toSlot(eff.toSlot, { k: M.READY, slot: eff.fromSlot, round: eff.round }); }
+          else if (eff.t === 'battle') { if (!deliver(eff.toSlot, () => { if (scene) scene.pvpBattle(eff.round, eff.boards); })) bus.toSlot(eff.toSlot, { k: M.BATTLE, round: eff.round, boards: eff.boards }); }
         }
+      } else if (p.k === M.DONE && roomHost) {
+        const allDone = roomHost.reportDone(from, p.stats);
+        if (allDone) { const rows = roomHost.buildFinalRows(nameOf); bus.toAll({ k: M.FINISH, rows }); finishPvpRoom(rows); }
       }
     } else {
       if (p.k === M.READY && p.slot !== mySlot && scene) scene.pvpOppReady();
       if (p.k === M.BATTLE && scene) scene.pvpBattle(p.round, p.boards);
+      if (p.k === M.FINISH) finishPvpRoom(p.rows);
     }
   });
 
@@ -109,8 +130,9 @@ export function createGame(ctx) {
         ...s.pairs.map(p => `<span class="bt-chip on">${ui.esc(p.name)}</span>`),
       ].join('');
     },
-    onGameOver: (stats) => (pvp ? finishPvp(stats) : finishSolo(stats)),
+    onGameOver: (stats) => (pvp ? finishMyDuel(stats) : finishSolo(stats)),
   };
+  let myDuelDone = false;
 
   function finishSolo(stats) {
     if (ended) return;
@@ -134,33 +156,44 @@ export function createGame(ctx) {
     }]);
   }
 
-  // PvP: os dois aparelhos chegam ao mesmo estado; só o host publica
-  function finishPvp(stats, leaver = -1) {
-    if (ended) return;
-    ended = true;
+  // Meu próprio duelo (1 contra 1, contra um jogador real ou um Ghost)
+  // terminou. Isso NÃO fecha a partida da sala inteira — com 3-5 jogadores
+  // há outras duplas ainda jogando. Reporto pro host DA SALA (ou resolvo
+  // direto se eu mesmo for o host); só quando TODO MUNDO real já terminou
+  // o próprio duelo é que a sessão da plataforma acaba de vez, com uma
+  // linha de resultado por jogador real (o Ghost nunca gera linha).
+  function finishMyDuel(stats, leaver = -1) {
+    if (myDuelDone) return;
+    myDuelDone = true;
     save.runs++;
     if (stats.won) save.pvpWins++;
     save.threeStars += stats.threeStars;
     writeSave(save);
-    if (!isHost) return;   // o convidado recebe FINISH do host
-    const rounds = Math.max(0, stats.round - 1);
     const myHp = leaver === mySlot ? 0 : stats.hp;
-    const oppHp = leaver === opp.slot ? 0 : stats.oppHp;
-    const rows = [
-      { slot: mySlot, hp: myHp, wins: stats.wins },
-      { slot: opp.slot, hp: oppHp, wins: 0 },
-    ].map(r => {
-      const won = r.hp > 0 && r.hp >= (r.slot === mySlot ? oppHp : myHp) && !(myHp === oppHp);
-      return {
-        slot: r.slot, name: nameOf(r.slot),
-        score: r.hp + rounds * 10,
-        coins: pvpCoinsFor(rounds, won),
-        detail: `${r.hp} ❤ · ${rounds} rodada${rounds === 1 ? '' : 's'}`,
-        sort: r.hp,
-        metrics: { round: rounds, pvpWon: won ? 1 : 0, threeStars: r.slot === mySlot ? stats.threeStars : 0 },
-      };
-    });
-    onFinish(rows);
+    const oppHp = (opp && leaver === opp.slot) ? 0 : stats.oppHp;
+    const rounds = Math.max(0, stats.round - 1);
+    const won = myHp > 0 && myHp >= oppHp && !(myHp === oppHp);
+    const payload = { hp: myHp, oppHp, wins: stats.wins, threeStars: stats.threeStars, round: rounds, won };
+    if (isHost && roomHost) {
+      const allDone = roomHost.reportDone(mySlot, payload);
+      if (allDone) { const rows = roomHost.buildFinalRows(nameOf); bus.toAll({ k: M.FINISH, rows }); finishPvpRoom(rows); }
+    } else {
+      bus.toHost({ k: M.DONE, stats: payload });
+    }
+  }
+
+  // fecha a sessão da plataforma inteira, com uma linha por jogador real
+  function finishPvpRoom(rows) {
+    if (ended) return;
+    ended = true;
+    onFinish(rows.map(r => ({
+      slot: r.slot, name: r.name,
+      score: r.hp + r.round * 10,
+      coins: pvpCoinsFor(r.round, r.won),
+      detail: `${r.hp} ❤ · ${r.round} rodada${r.round === 1 ? '' : 's'}`,
+      sort: r.hp,
+      metrics: { round: r.round, pvpWon: r.won ? 1 : 0, threeStars: r.slot === mySlot ? r.threeStars : 0 },
+    })));
   }
 
   const sceneKey = 'battle';
@@ -168,7 +201,7 @@ export function createGame(ctx) {
   const data = {
     hooks, seed,
     mode: pvp ? 'pvp' : 'pve',
-    flip: pvp && !isHost,
+    flip: myFlip,
     oppName: opp ? opp.name : '',
     // lojas diferentes para cada lado, a partir da mesma seed da sala
     runSeed: pvp ? (seed + mySlot * 1000003) >>> 0 : seed,
@@ -180,10 +213,11 @@ export function createGame(ctx) {
   return {
     begin() { scene = phaser.scene.getScene(sceneKey); scene.begin(); },
     playerLeft(slot) {
-      if (!pvp || ended) return;
+      if (!pvp || myDuelDone || isGhostMatch) return;   // ghost: a fonte sair não afeta quem enfrenta a cópia congelada
+      if (!opp || slot !== opp.slot) return;            // não é o MEU par — outra dupla resolve por conta própria
       if (scene) scene.pvpOppLeft();
       // quem ficou vence por W.O.
-      if (isHost && scene) finishPvp({ ...scene.summary(true), won: true }, slot);
+      if (scene) finishMyDuel({ ...scene.summary(true), won: true }, slot);
     },
     destroy() {
       ended = true;
