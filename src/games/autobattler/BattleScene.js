@@ -18,12 +18,13 @@ import { GAME_W, GAME_H } from '../../core/config.js';
 import { sfx } from '../../core/audio.js';
 import {
   COLS, ROWS, CELL_W, CELL_H, PLAYER_ROWS, BENCH_SIZE, SHOP_SIZE,
-  UNITS, RARITIES, FACTIONS, CLASSES, ROUNDS, TOTAL_ROUNDS, PVP_PREP_TIME,
+  UNITS, RARITIES, FACTIONS, CLASSES, ROUNDS, TOTAL_ROUNDS, PVP_PREP_TIME, LOOT_ROUNDS,
   REROLL_COST, XP_COST, XP_PER_BUY, MANA_MAX, MAX_LEVEL, START_HP,
   unitCost, sellValue, playerDamage, mirrorSpec,
 } from './config.js';
 import { Run } from './economy.js';
 import { createBattle, step, drainEvents, teamSynergies, STEP } from './sim.js';
+import { ITEMS, SLOTS, SLOT_NAME, SELL_VALUE, rollRewards, rollBossReward, equipBonus } from './equipment.js';
 
 const OUTLINE = 0x1c2440;
 const OX = Math.round((GAME_W - COLS * CELL_W) / 2);
@@ -493,6 +494,12 @@ export default class BattleScene extends Phaser.Scene {
       v.uid = u.uid;
       this._makeDraggable(v);
       this.views.set('p' + u.uid, v);
+      // selo discreto: quantos itens essa unidade tem equipados
+      const equipped = SLOTS.filter(s => u.equip && u.equip[s]).length;
+      if (equipped > 0) {
+        const badge = this.add.text(x + 20, y - 26, '⚙'.repeat(Math.min(3, equipped)), { fontSize: '11px', color: '#ffd23e' }).setOrigin(0.5).setDepth(v.depth + 1);
+        this.views.set('peq' + u.uid, badge);
+      }
     }
     // prévia de quem vem: a formação da rodada (PvE) ou a última do adversário (PvP)
     const preview = this.mode === 'pve' ? ROUNDS[this.run.round - 1].units : (this.oppSpec || []);
@@ -692,7 +699,8 @@ export default class BattleScene extends Phaser.Scene {
   _openInfo(defId, star, uid) {
     this._closePanels(true);
     const def = UNITS[defId];
-    const h = 236;
+    const showEquip = uid !== null && this.state === 'prep';
+    const h = showEquip ? 340 : 236;
     const top = this._panelBase(h);
     const P = this.panelUI;
     const mult = { 1: 1, 2: 1.8, 3: 3.2 }[star];
@@ -704,18 +712,69 @@ export default class BattleScene extends Phaser.Scene {
     for (let i = 0; i < star; i++) P.push(this.add.star(96 + i * 14, top + 42, 5, 3, 6, 0xffd23e).setDepth(62));
     T(92 + star * 14 + 4, top + 34, `${RARITIES[def.rarity].name}`, 12, RARITIES[def.rarity].text);
     T(92, top + 54, `${FACTIONS[def.faction].name}  ·  ${CLASSES[def.cls].name}`, 13, '#b8bfd8');
-    T(20, top + 84, `Vida ${Math.round(def.hp * mult)}   ·   Dano ${Math.round(def.atk * mult)}   ·   ${def.as.toFixed(1).replace('.', ',')} golpes/s   ·   Alcance ${def.range}`, 12.5, '#e8ecff');
+    const eq = uid !== null ? this.run.byUid(uid).equip : null;
+    const eqBonus = eq ? equipBonus(eq) : null;
+    const dispHp = Math.round(def.hp * mult * (1 + (eqBonus ? eqBonus.hp : 0)));
+    const dispAtk = Math.round(def.atk * mult * (1 + (eqBonus ? eqBonus.atk : 0)));
+    T(20, top + 84, `Vida ${dispHp}   ·   Dano ${dispAtk}   ·   ${def.as.toFixed(1).replace('.', ',')} golpes/s   ·   Alcance ${def.range}`, 12.5, eqBonus && (eqBonus.hp || eqBonus.atk) ? '#8fe66a' : '#e8ecff');
     T(20, top + 108, def.ability.name.toUpperCase(), 13, '#ffd23e', '700');
     T(20, top + 126, def.ability.desc(star), 12.5, '#b8bfd8');
-    if (uid !== null && this.state === 'prep') {
+    if (showEquip) {
+      T(20, top + 172, 'EQUIPAMENTO', 12, '#b8bfd8', '700');
+      SLOTS.forEach((slot, i) => {
+        const x = 60 + i * 108, y = top + 220;
+        const itemId = eq[slot];
+        const box = this.add.rectangle(x, y, 92, 60, itemId ? 0x2a3a66 : 0x1c2440, 1).setStrokeStyle(2, itemId ? RARITIES[ITEMS[itemId].rarity].color : 0x453a82).setDepth(62).setInteractive();
+        P.push(box);
+        P.push(this.add.text(x, y - 14, this._iconFor(slot), { fontSize: '18px' }).setOrigin(0.5).setDepth(63));
+        P.push(this.add.text(x, y + 12, itemId ? ITEMS[itemId].name : SLOT_NAME[slot], { fontFamily: FONT, fontSize: '9px', fontStyle: '700', color: itemId ? '#fff' : '#7f86a8', align: 'center', wordWrap: { width: 84 } }).setOrigin(0.5).setDepth(63));
+        box.on('pointerdown', () => {
+          sfx.click();
+          if (itemId) this._showSlotMenu(uid, slot, itemId);
+          else this._showInventoryForSlot(uid, slot);
+        });
+      });
       const u = this.run.byUid(uid);
       const v = sellValue(def, u.star);
       this._btn(120, top + h - 34, 190, 46, `VENDER  +${v}`, 0xe8483f, () => this._sellSelected(uid), P, 15);
       this._btn(GAME_W / 2 + 90, top + h - 34, 150, 46, 'FECHAR', 0x453a82, () => this._closePanels(), P, 15);
-      T(20, top + 166, 'Arraste para mover, ou toque numa célula sua.', 11, '#7f86a8');
     } else {
       this._btn(GAME_W / 2, top + h - 34, 200, 46, 'FECHAR', 0x453a82, () => this._closePanels(), P, 15);
     }
+  }
+
+  // toque num slot ocupado: trocar (abre o inventário) ou remover
+  _showSlotMenu(uid, slot, itemId) {
+    this._closePanels(true);
+    for (const o of this.prepUI) o.setVisible(false);
+    const P = this.panelUI;
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x0b0f24, 0.85).setDepth(58).setInteractive(); P.push(dim);
+    P.push(this.add.text(GAME_W / 2, 200, ITEMS[itemId].name, { fontFamily: FONT, fontSize: '18px', fontStyle: '700', color: '#fff' }).setOrigin(0.5).setDepth(61));
+    this._btn(GAME_W / 2, 260, 240, 46, 'TROCAR', 0x2fb573, () => this._showInventoryForSlot(uid, slot), P, 15);
+    this._btn(GAME_W / 2, 314, 240, 46, 'REMOVER (volta pro inventário)', 0x453a82, () => { this.run.unequipItem(uid, slot); this._closePanels(); this._refreshPrep(); }, P, 12.5);
+    this._btn(GAME_W / 2, 368, 200, 40, 'CANCELAR', 0x453a82, () => this._closePanels(), P, 13);
+  }
+
+  // itens do inventário que cabem naquele slot, pra equipar numa unidade
+  _showInventoryForSlot(uid, slot) {
+    this._closePanels(true);
+    for (const o of this.prepUI) o.setVisible(false);
+    const P = this.panelUI;
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x0b0f24, 0.9).setDepth(58).setInteractive(); P.push(dim);
+    P.push(this.add.text(GAME_W / 2, 66, `INVENTÁRIO · ${SLOT_NAME[slot].toUpperCase()}`, { fontFamily: FONT, fontSize: '15px', fontStyle: '700', color: '#fff' }).setOrigin(0.5).setDepth(61));
+    const opts = this.run.inventory.filter(id => ITEMS[id] && ITEMS[id].slot === slot);
+    if (!opts.length) P.push(this.add.text(GAME_W / 2, 130, 'Nenhum item desse tipo guardado.\nGanhe mais em rodadas de recompensa.', { fontFamily: FONT, fontSize: '13px', color: '#7f86a8', align: 'center' }).setOrigin(0.5, 0).setDepth(61));
+    opts.forEach((id, i) => {
+      const it = ITEMS[id];
+      const y = 110 + i * 70;
+      if (y > GAME_H - 70) return;
+      const row = this.add.rectangle(GAME_W / 2, y, GAME_W - 40, 58, 0x1c2440, 1).setStrokeStyle(2, RARITIES[it.rarity].color).setDepth(60).setInteractive(); P.push(row);
+      P.push(this.add.text(46, y, this._iconFor(it.slot), { fontSize: '20px' }).setOrigin(0.5).setDepth(61));
+      P.push(this.add.text(80, y - 12, it.name, { fontFamily: FONT, fontSize: '13px', fontStyle: '700', color: '#fff' }).setOrigin(0, 0.5).setDepth(61));
+      P.push(this.add.text(80, y + 10, Object.entries(it.stats || {}).map(([k, v]) => this._statLabel(k, v)).join(' · '), { fontFamily: FONT, fontSize: '10px', color: '#8fe66a' }).setOrigin(0, 0.5).setDepth(61));
+      row.on('pointerdown', () => { sfx.click(); const res = this.run.equipItem(uid, slot, id); if (res.ok) { this._toast(res.replaced ? `Trocado por ${it.name}` : `${it.name} equipado`, '#8fe66a'); this._closePanels(); this._refreshPrep(); } });
+    });
+    this._btn(GAME_W / 2, GAME_H - 46, 200, 44, 'CANCELAR', 0x453a82, () => this._closePanels(), P, 14);
   }
 
   _panelBase(h) {
@@ -738,6 +797,97 @@ export default class BattleScene extends Phaser.Scene {
     this.panelUI = [];
     if (!keepSelection) { this.selected = null; this._select(null); }
     if (this.state === 'prep') this._setPrepVisible(true);
+  }
+
+  // ================================================================
+  // equipamentos: recompensa (escolha 1 de 3) → equipar/guardar/vender
+  // ================================================================
+  _itemIcon(itemId) {
+    const it = ITEMS[itemId];
+    return { '⚔️': 'weapon', '🛡️': 'armor', '💍': 'accessory' }[it.slot] || '⚔️';
+  }
+  _iconFor(slot) { return slot === 'weapon' ? '⚔️' : slot === 'armor' ? '🛡️' : '💍'; }
+
+  _showReward() {
+    this._closePanels(true);
+    const rw = this.run.pendingReward; if (!rw) return;
+    for (const o of this.prepUI) o.setVisible(false);
+    const P = this.panelUI;
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x0b0f24, 0.88).setDepth(58).setInteractive(); P.push(dim);
+    const title = rw.boss ? '👑 RECOMPENSA DO CHEFE!' : '🎁 RODADA CONCLUÍDA!';
+    P.push(this.add.text(GAME_W / 2, 96, title, { fontFamily: FONT, fontSize: '19px', fontStyle: '700', color: rw.boss ? '#ffd23e' : '#fff' }).setOrigin(0.5).setDepth(61));
+    P.push(this.add.text(GAME_W / 2, 122, 'Escolha 1 equipamento', { fontFamily: FONT, fontSize: '13px', color: '#b8bfd8' }).setOrigin(0.5).setDepth(61));
+    const cw = 108, gap = 10, x0 = GAME_W / 2 - (cw * 3 + gap * 2) / 2 + cw / 2;
+    rw.ids.forEach((id, i) => {
+      const it = ITEMS[id];
+      const x = x0 + i * (cw + gap), y = 250;
+      const rar = RARITIES[it.rarity];
+      const card = this.add.rectangle(x, y, cw, 224, 0x1c2440, 1).setStrokeStyle(3, rar.color).setDepth(60).setInteractive(); P.push(card);
+      P.push(this.add.text(x, y - 96, this._iconFor(it.slot), { fontSize: '30px' }).setOrigin(0.5).setDepth(61));
+      P.push(this.add.text(x, y - 62, it.name, { fontFamily: FONT, fontSize: '12.5px', fontStyle: '700', color: '#fff', align: 'center', wordWrap: { width: cw - 12 } }).setOrigin(0.5, 0).setDepth(61));
+      P.push(this.add.text(x, y - 24, rar.name.toUpperCase(), { fontFamily: FONT, fontSize: '10.5px', fontStyle: '700', color: rar.text }).setOrigin(0.5).setDepth(61));
+      const statTxt = Object.entries(it.stats || {}).map(([k, v]) => this._statLabel(k, v)).join('\n');
+      P.push(this.add.text(x, y - 6, statTxt, { fontFamily: FONT, fontSize: '11px', color: '#8fe66a', align: 'center', lineSpacing: 3 }).setOrigin(0.5, 0).setDepth(61));
+      if (it.desc) P.push(this.add.text(x, y + 60, it.desc, { fontFamily: FONT, fontSize: '9.5px', color: '#b8bfd8', align: 'center', wordWrap: { width: cw - 10 } }).setOrigin(0.5, 0).setDepth(61));
+      card.on('pointerdown', () => { sfx.click(); this.run.chooseReward(id); this._showItemDecision(id); });
+    });
+  }
+  _statLabel(key, v) {
+    const pct = (n) => Math.round(n * 100) + '%';
+    const map = { atkPct: `+${pct(v)} Dano`, hpPct: `+${pct(v)} Vida`, asPct: `+${pct(v)} Vel. ataque`, armorFlat: `+${pct(v)} Armadura`, critPct: `+${pct(v)} Crítico`, lifesteal: `+${pct(v)} Roubo de vida` };
+    return map[key] || key;
+  }
+
+  // depois de escolher 1 de 3: fica no inventário — decide equipar, guardar ou vender
+  _showItemDecision(itemId) {
+    this._closePanels(true);
+    const it = ITEMS[itemId]; if (!it) return;
+    for (const o of this.prepUI) o.setVisible(false);
+    const P = this.panelUI;
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x0b0f24, 0.88).setDepth(58).setInteractive(); P.push(dim);
+    const rar = RARITIES[it.rarity];
+    P.push(this.add.text(GAME_W / 2, 140, this._iconFor(it.slot), { fontSize: '52px' }).setOrigin(0.5).setDepth(61));
+    P.push(this.add.text(GAME_W / 2, 210, it.name, { fontFamily: FONT, fontSize: '20px', fontStyle: '700', color: '#fff' }).setOrigin(0.5).setDepth(61));
+    P.push(this.add.text(GAME_W / 2, 236, `${rar.name.toUpperCase()} · ${SLOT_NAME[it.slot]}`, { fontFamily: FONT, fontSize: '12px', fontStyle: '700', color: rar.text }).setOrigin(0.5).setDepth(61));
+    const statTxt = Object.entries(it.stats || {}).map(([k, v]) => this._statLabel(k, v)).join('   ·   ');
+    P.push(this.add.text(GAME_W / 2, 268, statTxt, { fontFamily: FONT, fontSize: '13px', color: '#8fe66a' }).setOrigin(0.5).setDepth(61));
+    if (it.desc) P.push(this.add.text(GAME_W / 2, 292, it.desc, { fontFamily: FONT, fontSize: '11.5px', color: '#b8bfd8', align: 'center', wordWrap: { width: GAME_W - 80 } }).setOrigin(0.5, 0).setDepth(61));
+    this._btn(GAME_W / 2, 380, 260, 50, 'EQUIPAR', 0x2fb573, () => this._showUnitPicker(itemId), P, 16);
+    this._btn(GAME_W / 2, 440, 260, 44, 'GUARDAR NO INVENTÁRIO', 0x453a82, () => this._closePanels(), P, 14);
+    this._btn(GAME_W / 2, 494, 260, 44, `VENDER  +${SELL_VALUE[it.rarity]} ouro`, 0xe8483f, () => { this.run.sellItem(itemId); sfx.coin(); this._toast(`Vendido por ${SELL_VALUE[it.rarity]}`, '#ffd23e'); this._closePanels(); this._hud(); }, P, 14);
+  }
+
+  // escolhe em qual unidade (banco ou campo) equipar o item recém-obtido
+  _showUnitPicker(itemId) {
+    this._closePanels(true);
+    const it = ITEMS[itemId]; if (!it || !this.run.inventory.includes(itemId)) { this._closePanels(); return; }
+    for (const o of this.prepUI) o.setVisible(false);
+    const P = this.panelUI;
+    const dim = this.add.rectangle(GAME_W / 2, GAME_H / 2, GAME_W, GAME_H, 0x0b0f24, 0.9).setDepth(58).setInteractive(); P.push(dim);
+    P.push(this.add.text(GAME_W / 2, 70, `EQUIPAR: ${it.name.toUpperCase()}`, { fontFamily: FONT, fontSize: '16px', fontStyle: '700', color: '#fff' }).setOrigin(0.5).setDepth(61));
+    P.push(this.add.text(GAME_W / 2, 94, `${SLOT_NAME[it.slot]} · toque numa unidade`, { fontFamily: FONT, fontSize: '12px', color: '#b8bfd8' }).setOrigin(0.5).setDepth(61));
+    const units = [...this.run.units].sort((a, b) => (a.place.kind === 'board' ? 0 : 1) - (b.place.kind === 'board' ? 0 : 1));
+    const rowH = 62, y0 = 130;
+    units.forEach((u, i) => {
+      const def = UNITS[u.id];
+      const y = y0 + i * rowH;
+      if (y > GAME_H - 60) return;
+      const row = this.add.rectangle(GAME_W / 2, y, GAME_W - 40, rowH - 8, 0x1c2440, 1).setStrokeStyle(2, 0x453a82).setDepth(60).setInteractive(); P.push(row);
+      P.push(this.add.image(50, y, 'bt-' + u.id).setScale(0.55).setDepth(61));
+      P.push(this.add.text(84, y - 12, `${def.name}  ${'★'.repeat(u.star)}`, { fontFamily: FONT, fontSize: '13px', fontStyle: '700', color: '#fff' }).setOrigin(0, 0.5).setDepth(61));
+      const current = u.equip[it.slot];
+      const where = u.place.kind === 'board' ? 'em campo' : 'no banco';
+      P.push(this.add.text(84, y + 10, current ? `troca: ${ITEMS[current].name}` : `${SLOT_NAME[it.slot]} vazio · ${where}`, { fontFamily: FONT, fontSize: '10.5px', color: current ? '#ffd23e' : '#7f86a8' }).setOrigin(0, 0.5).setDepth(61));
+      row.on('pointerdown', () => {
+        sfx.click();
+        const res = this.run.equipItem(u.uid, it.slot, itemId);
+        if (!res.ok) return;
+        this._toast(res.replaced ? `${it.name} equipado (trocou ${ITEMS[res.replaced].name})` : `${it.name} equipado em ${def.name}`, '#8fe66a');
+        this._closePanels();
+        this._refreshPrep();
+      });
+    });
+    this._btn(GAME_W / 2, Math.min(GAME_H - 34, y0 + units.length * rowH + 20), 200, 44, 'CANCELAR', 0x453a82, () => { this._closePanels(); }, P, 14);
   }
 
   // ================================================================
@@ -865,8 +1015,15 @@ export default class BattleScene extends Phaser.Scene {
 
     this.time.delayedCall(1500, () => {
       t.destroy();
+      const playedRound = this.run.round, playedBoss = this.mode === 'pve' && ROUNDS[playedRound - 1] && ROUNDS[playedRound - 1].boss;
       const res = this.run.endRound({ won, damage });
       if (this.mode === 'pvp') this.oppHp = Math.max(0, this.oppHp - oppDamage);
+      // Só a Aventura solo tem loot/chefe por enquanto (o PvP já tem seu
+      // próprio equilíbrio 1x1; equipamento fica pra uma passada futura lá).
+      if (this.mode === 'pve' && won) {
+        if (playedBoss) this.run.openReward(rollBossReward(this.run.rnd), true);
+        else if (LOOT_ROUNDS.includes(playedRound)) this.run.openReward(rollRewards(this.run.rnd, 3, { round: playedRound, level: this.run.level, boardSize: this.run.boardUnits().length }), false);
+      }
       const b = res.breakdown;
       const parts = [`${b.base} base`];
       if (b.interest) parts.push(`${b.interest} juros`);
@@ -891,6 +1048,7 @@ export default class BattleScene extends Phaser.Scene {
       this._enterPrep();
       this._toast(`+${res.total} ouro  (${parts.join(' + ')})`, '#ffd23e');
       if (res.leveled) this.time.delayedCall(1300, () => this._fxLevel());
+      if (this.run.pendingReward) this.time.delayedCall(res.leveled ? 1700 : 900, () => this._showReward());
     });
   }
 

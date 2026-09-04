@@ -14,6 +14,7 @@ import {
   COLS, ROWS, UNITS, STAR_MULT, SYNERGIES, PAIRS, BATTLE_TIME_LIMIT,
   MANA_MAX, MANA_PER_ATTACK, MANA_PER_HIT,
 } from './config.js';
+import { equipBonus } from './equipment.js';
 
 export const STEP = 1 / 30;
 const RETARGET_EVERY = 0.8;
@@ -69,20 +70,26 @@ function makeFighter(spec, team, buffs, idx) {
   const def = UNITS[spec.id];
   const m = STAR_MULT[spec.star] || 1;
   const pu = buffs.perUnit[def.id] || { hp: 0, atk: 0, as: 0, armor: 0, mana: 0 };
-  const maxHp = Math.round(def.hp * m * (1 + buffs.hp + pu.hp));
+  // bônus de equipamento (arma/armadura/acessório escolhidos pelo jogador
+  // durante a corrida — nunca vem preenchido pra formações de PvE/chefe,
+  // então elas continuam exatamente como sempre foram)
+  const eq = equipBonus(spec.equip);
+  const maxHp = Math.round(def.hp * m * (1 + buffs.hp + pu.hp + eq.hp));
   return {
     uid: `${team}-${idx}`,
     ref: spec.uid || null,        // id da unidade na corrida (para a cena achar o sprite)
     id: def.id, def, team, star: spec.star,
     c: spec.c, r: spec.r,
     hp: maxHp, maxHp,
-    atk: def.atk * m * (1 + buffs.atk + pu.atk),
-    as: def.as * (1 + buffs.as + pu.as),
-    armor: Math.min(0.7, buffs.armor + pu.armor + (def.armor || 0)),
+    atk: def.atk * m * (1 + buffs.atk + pu.atk + eq.atk),
+    as: def.as * (1 + buffs.as + pu.as + eq.as),
+    armor: Math.min(0.7, buffs.armor + pu.armor + (def.armor || 0) + eq.armor),
     regen: buffs.regen,
     burnOnHit: buffs.burn,
     chillOnHit: buffs.chill, freezeChance: buffs.freeze,
-    crit: buffs.crit,
+    crit: buffs.crit + eq.crit,
+    lifesteal: eq.lifesteal, critDmgBonus: eq.critDmgBonus,
+    equipShieldPct: eq.shieldPct, equipShieldUsed: false,
     range: def.range, speed: def.speed,
     mana: pu.mana || 0, manaPerAttack: def.manaPerAttack || MANA_PER_ATTACK,
     shield: 0, shieldT: 0,
@@ -216,7 +223,7 @@ function dealDamage(b, from, to, amount, tag) {
   // perder o determinismo (mesma seed, mesma sequência)
   let dmg = amount * (1 - to.armor) * (tag === 'burn' ? 1 : 0.9 + b.rnd() * 0.2);
   let crit = false;
-  if (from && from.crit > 0 && tag === 'hit' && b.rnd() < from.crit) { dmg *= 2; crit = true; }
+  if (from && from.crit > 0 && tag === 'hit' && b.rnd() < from.crit) { dmg *= 2 + (from.critDmgBonus || 0); crit = true; }
   if (to.shield > 0) {
     const absorbed = Math.min(to.shield, dmg);
     to.shield -= absorbed; dmg -= absorbed;
@@ -226,6 +233,7 @@ function dealDamage(b, from, to, amount, tag) {
   to.mana = Math.min(MANA_MAX, to.mana + MANA_PER_HIT);
   if (from) {
     from.dmgDealt += dmg;
+    if (from.lifesteal && tag !== 'burn') heal(b, from, from, dmg * from.lifesteal);
     if (tag !== 'burn') {
       if (from.burnOnHit) applyBurn(to, to.maxHp * 0.03 / 3, 3);
       if (from.chillOnHit) applySlow(to, from.chillOnHit, 2);
@@ -397,6 +405,12 @@ export function step(b) {
       if (u.burn <= 0) u.burnDps = 0;
     }
     if (u.regen > 0 && u.hp < u.maxHp) u.hp = Math.min(u.maxHp, u.hp + u.maxHp * u.regen * dt);
+    // equipamento com escudo de vida baixa: dispara uma vez por luta
+    if (u.equipShieldPct && !u.equipShieldUsed && u.hp / u.maxHp < 0.3) {
+      u.equipShieldUsed = true;
+      u.shield += u.maxHp * u.equipShieldPct;
+      b.events.push({ t: 'shield', uid: u.uid, amount: Math.round(u.maxHp * u.equipShieldPct) });
+    }
     if (u.stun > 0) { u.stun -= dt; continue; }
 
     // habilidade pronta

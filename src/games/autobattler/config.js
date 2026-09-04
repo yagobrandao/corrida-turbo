@@ -25,6 +25,9 @@ export const XP_PER_ROUND = 2;
 export const START_LEVEL = 2;
 export const MAX_LEVEL = 8;
 export const TOTAL_ROUNDS = 10;
+// rodadas de loot (PvE, fora do chefe): vencer abre "escolha 1 de 3"
+// equipamentos. O chefe (última rodada) sempre dá 1 de 3 LENDÁRIOS.
+export const LOOT_ROUNDS = [3, 6, 8];
 export const BATTLE_TIME_LIMIT = 45;       // segundos; empata → decide por vida
 
 // PvP: tempo de preparação por rodada (quem não apertar LUTAR entra assim mesmo)

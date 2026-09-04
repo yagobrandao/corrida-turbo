@@ -11,6 +11,7 @@ import {
   RARITIES, SHOP_UNITS, UNITS, PLAYER_ROWS, TOTAL_ROUNDS,
   baseIncome, interest, streakBonus, WIN_BONUS, sellValue, unitCost,
 } from './config.js';
+import { ITEMS, SLOTS, SELL_VALUE } from './equipment.js';
 
 const RARITY_ORDER = ['comum', 'raro', 'epico'];
 
@@ -25,12 +26,16 @@ export class Run {
     this.streak = 0;            // positivo = vitórias seguidas, negativo = derrotas
     this.wins = 0;
     this.nextUid = 1;
-    this.units = [];            // { uid, id, star, place: {kind:'bench', i} | {kind:'board', c, r} }
+    this.units = [];            // { uid, id, star, place: {kind:'bench', i} | {kind:'board', c, r}, equip }
     this.shop = [];             // ids (null = comprado)
     this.locked = false;
     this.pool = {};             // cópias restantes por unidade
     for (const u of SHOP_UNITS) this.pool[u.id] = RARITIES[u.rarity].pool;
-    this.stats = { bought: 0, merges: 0, threeStars: 0, bossKilled: false };
+    this.stats = { bought: 0, merges: 0, threeStars: 0, bossKilled: false, itemsFound: 0, itemsCombined: 0 };
+    // equipamentos: nunca persistem entre partidas (ninguém entra com
+    // vantagem) — inventário e pendências vivem só aqui, dentro da corrida
+    this.inventory = [];          // ids de itens guardados, ainda sem dono
+    this.pendingReward = null;    // { ids: [...], boss } — recompensa aberta esperando escolha
     this.rollShop();
   }
 
@@ -48,7 +53,7 @@ export class Run {
 
   // formação para a simulação (linhas do jogador)
   boardSpec() {
-    return this.boardUnits().map(u => ({ id: u.id, star: u.star, c: u.place.c, r: u.place.r, uid: u.uid }));
+    return this.boardUnits().map(u => ({ id: u.id, star: u.star, c: u.place.c, r: u.place.r, uid: u.uid, equip: u.equip }));
   }
 
   // ------------------------------------------------------------ loja
@@ -98,7 +103,7 @@ export class Run {
     this.shop[i] = null;
     this.pool[id]--;
     this.stats.bought++;
-    const u = { uid: this.nextUid++, id, star: 1, place: { kind: 'bench', i: slot < 0 ? 99 : slot } };
+    const u = { uid: this.nextUid++, id, star: 1, place: { kind: 'bench', i: slot < 0 ? 99 : slot }, equip: { weapon: null, armor: null, accessory: null } };
     this.units.push(u);
     const merged = this._tryMerge(id);
     return { ok: true, unit: u, merged };
@@ -135,6 +140,9 @@ export class Run {
       same.sort((a, b) => (a.place.kind === 'board' ? 0 : 1) - (b.place.kind === 'board' ? 0 : 1) || a.uid - b.uid);
       const keep = same[0];
       const gone = same.slice(1, 3);
+      // itens equipados nas cópias que somem voltam pro inventário — nunca
+      // desaparecem, mesmo quando a fusão acontece sozinha (autoFill etc.)
+      for (const g of gone) this._returnEquip(g);
       for (const g of gone) this.units.splice(this.units.indexOf(g), 1);
       keep.star = star + 1;
       this.stats.merges++;
@@ -183,10 +191,76 @@ export class Run {
     const def = UNITS[u.id];
     const v = sellValue(def, u.star);
     this.gold += v;
-    // as cópias voltam para o pool
+    // as cópias voltam para o pool; os itens equipados voltam pro inventário
     this.pool[u.id] = (this.pool[u.id] || 0) + Math.pow(3, u.star - 1);
+    this._returnEquip(u);
     this.units.splice(this.units.indexOf(u), 1);
     return { ok: true, gold: v };
+  }
+
+  // ------------------------------------------------------------ equipamentos
+  // Nunca automático: o jogador escolhe guardar, vender ou equipar — e em
+  // qual unidade. Itens nunca se perdem: vender/fundir a unidade devolve o
+  // que estava equipado pro inventário.
+  _returnEquip(u) {
+    if (!u.equip) return;
+    for (const slot of SLOTS) { const id = u.equip[slot]; if (id) { this.inventory.push(id); u.equip[slot] = null; } }
+  }
+  openReward(ids, boss = false) { this.pendingReward = { ids, boss }; return this.pendingReward; }
+  // escolhe 1 das opções da recompensa aberta; guarda no inventário
+  chooseReward(itemId) {
+    if (!this.pendingReward || !this.pendingReward.ids.includes(itemId)) return { ok: false };
+    this.pendingReward = null;
+    this.inventory.push(itemId);
+    this.stats.itemsFound++;
+    return { ok: true, item: itemId };
+  }
+  skipReward() { this.pendingReward = null; }
+  sellItem(itemId) {
+    const i = this.inventory.indexOf(itemId);
+    if (i < 0) return { ok: false };
+    const item = ITEMS[itemId]; if (!item) return { ok: false };
+    this.inventory.splice(i, 1);
+    const v = SELL_VALUE[item.rarity] || 1;
+    this.gold += v;
+    return { ok: true, gold: v };
+  }
+  // Devolve os equipáveis do inventário para o item, tirando o de lá antes
+  // (troca é atômica: nunca fica sem nada no slot por um instante).
+  equipItem(uid, slot, itemId) {
+    const u = this.byUid(uid); const item = ITEMS[itemId];
+    if (!u || !item || item.slot !== slot) return { ok: false };
+    const i = this.inventory.indexOf(itemId);
+    if (i < 0) return { ok: false };
+    this.inventory.splice(i, 1);
+    const prev = u.equip[slot];
+    if (prev) this.inventory.push(prev);
+    u.equip[slot] = itemId;
+    return { ok: true, replaced: prev };
+  }
+  unequipItem(uid, slot) {
+    const u = this.byUid(uid);
+    if (!u || !u.equip[slot]) return { ok: false };
+    this.inventory.push(u.equip[slot]);
+    u.equip[slot] = null;
+    return { ok: true };
+  }
+  // duas cópias do MESMO item base viram o combinado da receita — o
+  // jogador decide quando (nunca automático, igual à fusão de itens não é)
+  combineItems(idA, idB, recipeId) {
+    const item = ITEMS[recipeId];
+    if (!item || !item.recipe) return { ok: false };
+    const [ra, rb] = item.recipe;
+    const has = [...this.inventory];
+    const ia = has.indexOf(idA), ib = idA === idB ? has.indexOf(idB, ia + 1) : has.indexOf(idB);
+    if (ia < 0 || ib < 0) return { ok: false };
+    const okPair = (ITEMS[idA] && ITEMS[idA].id === ra && ITEMS[idB] && ITEMS[idB].id === rb) || (ITEMS[idA] && ITEMS[idA].id === rb && ITEMS[idB] && ITEMS[idB].id === ra);
+    if (!okPair) return { ok: false };
+    const idxs = [ia, ib].sort((a, b) => b - a);
+    for (const idx of idxs) this.inventory.splice(idx, 1);
+    this.inventory.push(recipeId);
+    this.stats.itemsCombined++;
+    return { ok: true, item: recipeId };
   }
 
   // Antes de lutar com campo vazio/incompleto, sobe do banco automaticamente
