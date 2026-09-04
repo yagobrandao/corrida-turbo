@@ -1018,11 +1018,16 @@ export default class BattleScene extends Phaser.Scene {
       const playedRound = this.run.round, playedBoss = this.mode === 'pve' && ROUNDS[playedRound - 1] && ROUNDS[playedRound - 1].boss;
       const res = this.run.endRound({ won, damage });
       if (this.mode === 'pvp') this.oppHp = Math.max(0, this.oppHp - oppDamage);
-      // Só a Aventura solo tem loot/chefe por enquanto (o PvP já tem seu
-      // próprio equilíbrio 1x1; equipamento fica pra uma passada futura lá).
+      // Aventura solo: loot nas rodadas 3/6/8 só pra quem venceu a luta, e
+      // chefe lendário na 10. PvP: mesmas rodadas de loot, mas pros DOIS
+      // lados, ganhando ou perdendo a rodada — senão quem já está atrás na
+      // vida cairia ainda mais pra trás em equipamento também. Sem "chefe"
+      // no PvP (não existe um inimigo-chefe lá), então nunca sai lendário.
       if (this.mode === 'pve' && won) {
         if (playedBoss) this.run.openReward(rollBossReward(this.run.rnd), true);
         else if (LOOT_ROUNDS.includes(playedRound)) this.run.openReward(rollRewards(this.run.rnd, 3, { round: playedRound, level: this.run.level, boardSize: this.run.boardUnits().length }), false);
+      } else if (this.mode === 'pvp' && LOOT_ROUNDS.includes(playedRound)) {
+        this.run.openReward(rollRewards(this.run.rnd, 3, { round: playedRound, level: this.run.level, boardSize: this.run.boardUnits().length }), false);
       }
       const b = res.breakdown;
       const parts = [`${b.base} base`];
